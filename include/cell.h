@@ -1,8 +1,12 @@
-//
-// Created by sosty on 15/04/2026.
-//
-
 #ifndef DSMC_CELL_H
 #define DSMC_CELL_H
+
+typedef struct {
+    double countNP;
+    double countVx;
+    double countVy;
+    double countVz;
+    double countV2;
+} Cell;
 
 #endif //DSMC_CELL_H

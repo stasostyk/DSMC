@@ -2,96 +2,34 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <memory.h>
+#include "../include/cell.h"
+#include "../include/config.h"
+#include "../include/particle.h"
+#include "../include/math_utils.h"
 
-#define MAX_PARTICLES 200000
-#define NX 25
-#define NY 25
-
-const double KB = 1.380649e-23;      /* Boltzmann constant */
-const double NA = 6.02214076e23;     /* Avogadro constant */
-
-typedef struct {
-    double x, y;
-    double vx, vy, vz;
-} Particle;
-
-typedef struct {
-    double countNP;   /* accumulated particle count */
-    double countVx;   /* accumulated sum of vx */
-    double countVy;   /* accumulated sum of vy */
-    double countVz;   /* accumulated sum of vz */
-    double countV2;   /* accumulated sum of vx^2 + vy^2 + vz^2 */
-} CellSample;
-
-CellSample samples[NX][NY];
-int sampleSteps = 0;
-const int firstSampleStep = 0;
-const int sampleEvery = 1;
-
-void reset_sampling(void) {
-    sampleSteps = 0;
-
-    for (int k = 0; k < NX; k++) {
-        for (int l = 0; l < NY; l++) {
-            samples[k][l].countNP = 0.0;
-            samples[k][l].countVx = 0.0;
-            samples[k][l].countVy = 0.0;
-            samples[k][l].countVz = 0.0;
-            samples[k][l].countV2 = 0.0;
-        }
-    }
-}
-
-const double Lx = 1.0;
-const double Ly = 1.0;
-const double Lz = 1.0;       /* effective thickness for 2D cells */
-
-const double T0 = 300.0;     /* Kelvin */
-const double n0 = 1.0e20;    /* number density, 1/m^3 */
-const double molarMass = 0.028;  /* kg/mol, about nitrogen */
-
-const double ux0 = 0.0;
-const double uy0 = 0.0;
-const double uz0 = 0.0;
-
-const double dt = 1.0e-5;
-const int nSteps = 200;
-const int outputEvery = 20;
-
-const int particlesPerCellTarget = 200;
-
+Particle P[MAX_PARTICLES];
+Cell samples[NX][NY];
 int cellCount[NX][NY];
 int cellList[NX][NY][MAX_PARTICLES];
 
-// derived quantities:
+// counters
+int sampleSteps = 0;
+int NP = 0;
+long long totalCollisions = 0;
+
+// derived quantities
 double dx, dy;
 double cellVolume;
 double moleculeMass;
 double weight;
-
-// hard sphere assumption
-const double diameter = 4.0e-10;
 double sigmaHS;
-long long totalCollisions = 0;
 
-Particle P[MAX_PARTICLES];
-int NP = 0;
 
-double randu(void) {
-    return (rand() + 1.0) / (RAND_MAX + 2.0);
-}
-
-double randn(double mean, double stddev) { // gaussian rng
-    double u1 = randu();
-    double u2 = randu();
-
-    double r = sqrt(-2.0 * log(u1));
-    double theta = 2.0 * M_PI * u2;
-
-    return mean + stddev * r * cos(theta);
-}
 
 void setup(void) {
+    memset(samples, 0, sizeof(samples));
+
     dx = Lx / NX;
     dy = Ly / NY;
     cellVolume = dx * dy * Lz;
@@ -119,8 +57,6 @@ void random_unit_vector(double *nx, double *ny, double *nz) {
     *ny = s * sin(phi);
     *nz = mu;
 }
-
-
 
 void elastic_collision(Particle *a, Particle *b) {
     double vcx = 0.5 * (a->vx + b->vx);
@@ -217,41 +153,28 @@ void move_particles(void) {
     }
 }
 
-double Tleft = 400.0;
-double Tright = 200.0;
-
-double normal(double mean, double stddev) {
-    double u1 = randu();
-    double u2 = randu();
-
-    double r = sqrt(-2.0 * log(u1));
-    double theta = 2.0 * M_PI * u2;
-
-    return mean + stddev * r * cos(theta);
-}
-
 double rayleigh(double sigma) {
     double u = randu();
     return sigma * sqrt(-2.0 * log(u));
 }
 
-void apply_periodic_bc(void) {
+void apply_boundary_conditions(void) {
     for (int i = 0; i < NP; i++) {
         if (P[i].x < 0.0) {
             P[i].x = 0.0;
-            P[i].vy = normal(0, sqrt(KB*Tleft/moleculeMass));
-            P[i].vz = normal(0, sqrt(KB*Tleft/moleculeMass));
+            P[i].vy = randn(0, sqrt(KB*Tleft/moleculeMass));
+            P[i].vz = randn(0, sqrt(KB*Tleft/moleculeMass));
             P[i].vx = rayleigh(sqrt(KB*Tleft/moleculeMass));
         }
-        if (P[i].x >= Lx)  {
+        else if (P[i].x >= Lx)  {
             P[i].x = Lx;
-            P[i].vy = normal(0, sqrt(KB*Tright/moleculeMass));
-            P[i].vz = normal(0, sqrt(KB*Tright/moleculeMass));
+            P[i].vy = randn(0, sqrt(KB*Tright/moleculeMass));
+            P[i].vz = randn(0, sqrt(KB*Tright/moleculeMass));
             P[i].vx = -rayleigh(sqrt(KB*Tright/moleculeMass));
         }
 
-        while (P[i].y < 0.0)  P[i].y += Ly;
-        while (P[i].y >= Ly)  P[i].y -= Ly;
+        else if (P[i].y < 0.0)  P[i].y += Ly;
+        else if (P[i].y >= Ly)  P[i].y -= Ly;
     }
 }
 
@@ -302,65 +225,6 @@ void print_global_diagnostics(int step) {
 
     printf("step=%d NP=%d mean_u=(%.6e, %.6e, %.6e) T=%.6e\n",
            step, NP, ux, uy, uz, T);
-}
-
-void sample_macros(int step) {
-    char filename[64];
-    snprintf(filename, sizeof(filename), "fields_%04d.dat", step);
-
-    FILE *fp = fopen(filename, "w");
-    if (!fp) {
-        fprintf(stderr, "Could not open output file\n");
-        exit(1);
-    }
-
-    fprintf(fp, "# x y n ux uy uz T count\n");
-
-    for (int k = 0; k < NX; k++) {
-        for (int l = 0; l < NY; l++) {
-            int Nc = cellCount[k][l];
-
-            double xc = (k + 0.5) * dx;
-            double yc = (l + 0.5) * dy;
-
-            if (Nc == 0) {
-                fprintf(fp, "%e %e %e %e %e %e %e %d\n",
-                        xc, yc, 0.0, 0.0, 0.0, 0.0, 0.0, 0);
-                continue;
-            }
-
-            double sumVx = 0.0, sumVy = 0.0, sumVz = 0.0;
-
-            for (int q = 0; q < Nc; q++) {
-                int i = cellList[k][l][q];
-                sumVx += P[i].vx;
-                sumVy += P[i].vy;
-                sumVz += P[i].vz;
-            }
-
-            double ux = sumVx / Nc;
-            double uy = sumVy / Nc;
-            double uz = sumVz / Nc;
-
-            double sumC2 = 0.0;
-            for (int q = 0; q < Nc; q++) {
-                int i = cellList[k][l][q];
-                double cx = P[i].vx - ux;
-                double cy = P[i].vy - uy;
-                double cz = P[i].vz - uz;
-                sumC2 += cx * cx + cy * cy + cz * cz;
-            }
-
-            double n = weight * Nc / cellVolume;
-            double T = moleculeMass * sumC2 / (3.0 * KB * Nc);
-
-            fprintf(fp, "%e %e %e %e %e %e %e %d\n",
-                    xc, yc, n, ux, uy, uz, T, Nc);
-        }
-        fprintf(fp, "\n");
-    }
-
-    fclose(fp);
 }
 
 void accumulate_sampling(void) {
@@ -434,24 +298,20 @@ int main(void) {
 
     setup();
     initialize_particles();
-    reset_sampling();
 
     for (int step = 0; step <= nSteps; step++) {
-        if (step > 0) {
-            move_particles();
-            apply_periodic_bc();
-        }
-
+        move_particles();
+        apply_boundary_conditions();
         index_particles();
         collide_all_cells();
 
-        if (step >= firstSampleStep && step % sampleEvery == 0) {
+        if (step >= firstSampleStep && step % samplingPeriod == 0) {
             accumulate_sampling();
         }
 
-        if (step % outputEvery == 0) {
+        if (step % printPeriod == 0) {
             print_global_diagnostics(step);
-            printf("  totalCollisions = %lld\n", totalCollisions);
+            printf("totalCollisions = %lld\n", totalCollisions);
         }
     }
 
