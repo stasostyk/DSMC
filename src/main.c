@@ -6,11 +6,12 @@
 #include "../include/cell.h"
 #include "../include/particle.h"
 #include "../include/math_utils.h"
+#include "../include/collider.h"
 
 Particle P[MAX_PARTICLES];
 Cell samples[NX][NY];
 int cellCount[NX][NY];
-int cellList[NX][NY][MAX_PARTICLES];
+int cellList[NX][NY][MAX_PARTICLES_PER_CELL];
 
 // counters
 int sampleSteps = 0;
@@ -20,9 +21,7 @@ long long totalCollisions = 0;
 // derived quantities
 double dx, dy;
 double cellVolume;
-double moleculeMass;
 double weight;
-double sigmaHS;
 double NFree;
 double UFree;
 double UxFree, UyFree;
@@ -36,8 +35,6 @@ void setup(void) {
     dy = Ly / NY;
     cellVolume = dx * dy * Lz;
 
-    moleculeMass = molarMass / NA;
-
     NP = NX * NY * particlesPerCellTarget;
 
     if (NP > MAX_PARTICLES) {
@@ -45,109 +42,12 @@ void setup(void) {
         exit(1);
     }
 
-    sigmaHS = M_PI * diameter * diameter;
-
     NFree = PFree / ( KB * TFree );
     UFree = MaFree * sqrt ( ( 5.0 / 3.0 ) * KB * TFree / moleculeMass );
     UxFree = UFree * cos ( M_PI * angleOfAttack / 180.0 );
     UyFree = - UFree * sin ( M_PI * angleOfAttack / 180.0 );
 
     weight = NFree * cellVolume / particlesPerCellTarget;
-}
-
-void elastic_collision(Particle *a, Particle *b) {
-    double vcx = 0.5 * (a->vx + b->vx);
-    double vcy = 0.5 * (a->vy + b->vy);
-    double vcz = 0.5 * (a->vz + b->vz);
-
-    double crx = b->vx - a->vx;
-    double cry = b->vy - a->vy;
-    double crz = b->vz - a->vz;
-
-    double cr = sqrt(crx * crx + cry * cry + crz * crz);
-
-    double nx, ny, nz;
-    random_unit_vector(&nx, &ny, &nz);
-
-    double halfcr = 0.5 * cr;
-    double rcx = halfcr * nx;
-    double rcy = halfcr * ny;
-    double rcz = halfcr * nz;
-
-    a->vx = vcx - rcx;
-    a->vy = vcy - rcy;
-    a->vz = vcz - rcz;
-
-    b->vx = vcx + rcx;
-    b->vy = vcy + rcy;
-    b->vz = vcz + rcz;
-}
-
-int collide_cell_primitive(int k, int l) {
-    int Nc = cellCount[k][l];
-    if (Nc < 2) {
-        return 0;
-    }
-
-    int nColl = 0;
-
-    for (int q1 = 0; q1 < Nc - 1; q1++) {
-        int i = cellList[k][l][q1];
-
-        for (int q2 = q1 + 1; q2 < Nc; q2++) {
-            int j = cellList[k][l][q2];
-
-            double dvx = P[j].vx - P[i].vx;
-            double dvy = P[j].vy - P[i].vy;
-            double dvz = P[j].vz - P[i].vz;
-            double cr = sqrt(dvx * dvx + dvy * dvy + dvz * dvz);
-
-            double pColl = weight * sigmaHS * cr * dt / cellVolume;
-
-            if (pColl > 1.0) {
-                pColl = 1.0;
-            }
-
-            if (randu() < pColl) {
-                elastic_collision(&P[i], &P[j]);
-                nColl++;
-            }
-        }
-    }
-
-    return nColl;
-}
-
-void collide_all_cells(void) {
-    long long stepCollisions = 0;
-
-    for (int k = 0; k < NX; k++) {
-        for (int l = 0; l < NY; l++) {
-            stepCollisions += collide_cell_primitive(k, l);
-        }
-    }
-
-    totalCollisions += stepCollisions;
-}
-
-void apply_boundary_conditions_wall(void) {
-    for (int i = 0; i < NP; i++) {
-        if (P[i].x < 0.0) {
-            P[i].x = 0.0;
-            P[i].vy = randn(0, sqrt(KB*Tleft/moleculeMass));
-            P[i].vz = randn(0, sqrt(KB*Tleft/moleculeMass));
-            P[i].vx = rayleigh(sqrt(KB*Tleft/moleculeMass));
-        }
-        else if (P[i].x >= Lx)  {
-            P[i].x = Lx;
-            P[i].vy = randn(0, sqrt(KB*Tright/moleculeMass));
-            P[i].vz = randn(0, sqrt(KB*Tright/moleculeMass));
-            P[i].vx = -rayleigh(sqrt(KB*Tright/moleculeMass));
-        }
-
-        else if (P[i].y < 0.0)  P[i].y += Ly;
-        else if (P[i].y >= Ly)  P[i].y -= Ly;
-    }
 }
 
 void index_particles(void) {
@@ -354,13 +254,14 @@ int main(void) {
     srand((unsigned int)time(NULL));
 
     setup();
+    collider_setup();
     initialize_particles();
 
     for (int step = 0; step <= nSteps; step++) {
         move_particles();
         apply_boundary_conditions_free_stream();
         index_particles();
-        collide_all_cells();
+        totalCollisions += collide_particles(P, cellCount, cellList, weight, cellVolume);
 
         if (step >= firstSampleStep && step % samplingPeriod == 0) {
             accumulate_sampling();

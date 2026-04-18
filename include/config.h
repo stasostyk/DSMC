@@ -2,6 +2,7 @@
 #define DSMC_CONFIG_H
 
 #define MAX_PARTICLES 200000
+#define MAX_PARTICLES_PER_CELL 1000
 #define NX 20
 #define NY 20
 
@@ -32,20 +33,23 @@ extern const int particlesPerCellTarget;
 extern const int firstSampleStep;
 extern const int samplingPeriod;
 
-// boundary conditions
-extern double Tleft;
-extern double Tright;
-
 // wing
-extern double WingX;
-extern double WingY;
-extern double WingLength;
-extern double Tw;
+extern const double WingX;
+extern const double WingY;
+extern const double WingLength;
+extern const double Tw;
 
 // stream
-extern double MaFree;
-extern double PFree;
-extern double TFree;
-extern double angleOfAttack;
+extern const double MaFree;
+extern const double PFree;
+extern const double TFree;
+extern const double angleOfAttack;
+
+// VHS model
+extern const double omega;
+extern const double dRef;
+
+// derived parameters
+extern const double moleculeMass;
 
 #endif //DSMC_CONFIG_H
