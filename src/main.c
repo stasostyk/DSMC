@@ -4,7 +4,6 @@
 #include <time.h>
 #include <memory.h>
 #include "../include/cell.h"
-#include "../include/config.h"
 #include "../include/particle.h"
 #include "../include/math_utils.h"
 
@@ -24,6 +23,9 @@ double cellVolume;
 double moleculeMass;
 double weight;
 double sigmaHS;
+double NFree;
+double UFree;
+double UxFree, UyFree;
 
 
 
@@ -36,8 +38,6 @@ void setup(void) {
 
     moleculeMass = molarMass / NA;
 
-    weight = n0 * cellVolume / particlesPerCellTarget;
-
     NP = NX * NY * particlesPerCellTarget;
 
     if (NP > MAX_PARTICLES) {
@@ -46,16 +46,13 @@ void setup(void) {
     }
 
     sigmaHS = M_PI * diameter * diameter;
-}
 
-void random_unit_vector(double *nx, double *ny, double *nz) {
-    double mu = 2.0 * randu() - 1.0;      /* cos(theta) uniformly in [-1,1] */
-    double phi = 2.0 * M_PI * randu();
-    double s = sqrt(1.0 - mu * mu);
+    NFree = PFree / ( KB * TFree );
+    UFree = MaFree * sqrt ( ( 5.0 / 3.0 ) * KB * TFree / moleculeMass );
+    UxFree = UFree * cos ( M_PI * angleOfAttack / 180.0 );
+    UyFree = - UFree * sin ( M_PI * angleOfAttack / 180.0 );
 
-    *nx = s * cos(phi);
-    *ny = s * sin(phi);
-    *nz = mu;
+    weight = NFree * cellVolume / particlesPerCellTarget;
 }
 
 void elastic_collision(Particle *a, Particle *b) {
@@ -133,32 +130,7 @@ void collide_all_cells(void) {
     totalCollisions += stepCollisions;
 }
 
-void initialize_particles(void) {
-    double thermalStd = sqrt(KB * T0 / moleculeMass);
-
-    for (int i = 0; i < NP; i++) {
-        P[i].x = Lx * randu();
-        P[i].y = Ly * randu();
-
-        P[i].vx = randn(ux0, thermalStd);
-        P[i].vy = randn(uy0, thermalStd);
-        P[i].vz = randn(uz0, thermalStd);
-    }
-}
-
-void move_particles(void) {
-    for (int i = 0; i < NP; i++) {
-        P[i].x += dt * P[i].vx;
-        P[i].y += dt * P[i].vy;
-    }
-}
-
-double rayleigh(double sigma) {
-    double u = randu();
-    return sigma * sqrt(-2.0 * log(u));
-}
-
-void apply_boundary_conditions(void) {
+void apply_boundary_conditions_wall(void) {
     for (int i = 0; i < NP; i++) {
         if (P[i].x < 0.0) {
             P[i].x = 0.0;
@@ -293,6 +265,91 @@ void write_averaged_macros(const char *filename) {
     fclose(fp);
 }
 
+void generate_particles_in_rect(double x1, double x2,
+                                double y1, double y2,
+                                double ngas,
+                                double ux, double uy,
+                                double Tgas,
+                                int moveFlag) {
+    double V = (x2 - x1) * (y2 - y1) * Lz;
+    double N_add_exp = ngas * V / weight;
+    int Nnew;
+    if ( N_add_exp > 20.0 ) { // use uniform approximation if large, poisson if small
+        Nnew = (int)(N_add_exp);
+        if (randu() < N_add_exp - Nnew) Nnew++;
+    } else {
+        Nnew = (int) randp( N_add_exp );
+    }
+
+    if (NP + Nnew > MAX_PARTICLES) {
+        fprintf(stderr, "Too many particles\n");
+        exit(1);
+    }
+
+    for (int i = NP; i < NP + Nnew; i++) {
+        P[i].x = x1 + (x2 - x1) * randu();
+        P[i].y = y1 + (y2 - y1) * randu();
+
+        P[i].vx = randn(ux, sqrt(KB * Tgas / moleculeMass));
+        P[i].vy = randn(uy, sqrt(KB * Tgas / moleculeMass));
+        P[i].vz = randn(0.0, sqrt(KB * Tgas / moleculeMass));
+
+        if (moveFlag) {
+            P[i].x += dt * P[i].vx;
+            P[i].y += dt * P[i].vy;
+        }
+    }
+
+    NP += Nnew;
+}
+
+void initialize_particles(void) {
+    NP = 0;
+    generate_particles_in_rect(0.0, Lx, 0.0, Ly, NFree, UxFree, UyFree, TFree, 0);
+}
+
+void apply_boundary_conditions_free_stream() {
+    generate_particles_in_rect(-DL, 0.0, 0.0, Ly, NFree, UxFree, UyFree, TFree, 1);
+    generate_particles_in_rect(Lx, Lx + DL, 0.0, Ly, NFree, UxFree, UyFree, TFree, 1);
+    generate_particles_in_rect(0.0, Lx, -DL, 0.0, NFree, UxFree, UyFree, TFree, 1);
+    generate_particles_in_rect(0.0, Lx, Ly, Ly + DL, NFree, UxFree, UyFree, TFree, 1);
+
+    for (int i = 0; i < NP; i++) {
+        if (P[i].x < 0.0 || P[i].x >= Lx || P[i].y < 0.0 || P[i].y >= Ly) {
+            P[i] = P[NP - 1];
+            NP--;
+            i--;
+        }
+    }
+}
+
+void move_particles(void) {
+    for (int i = 0; i < NP; i++) {
+        double X0 = P[i].x;
+        double Y0 = P[i].y;
+        P[i].x += dt * P[i].vx;
+        P[i].y += dt * P[i].vy;
+
+
+        if ( ( Y0 - WingY ) * ( P[i].y - WingY ) < 0.0 ) {
+// Linear interpolation to point Y = WingY
+            double Xw=( X0*(WingY-P[i].y)+P[i].x*(Y0-WingY))/(Y0-P[i].y);
+            if ( Xw > WingX && Xw < WingX + WingLength ) {
+// Molecule interacts with the wing during the time step
+// Linear interpolation of the time of scattering, Eq. (6.5.4)
+                double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P[i].y );
+// Generate velocity vector of the reflected molecule
+                diffuse_scattering_y(&P[i].vx, &P[i].vy, &P[i].vz, moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0));
+// Move the reflected molecule
+                P[i].x = Xw + Dt1 * P[i].vx;
+                P[i].y = WingY + Dt1 * P[i].vy;
+            }
+        }
+    }
+
+
+}
+
 int main(void) {
     srand((unsigned int)time(NULL));
 
@@ -301,7 +358,7 @@ int main(void) {
 
     for (int step = 0; step <= nSteps; step++) {
         move_particles();
-        apply_boundary_conditions();
+        apply_boundary_conditions_free_stream();
         index_particles();
         collide_all_cells();
 
