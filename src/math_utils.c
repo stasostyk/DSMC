@@ -32,6 +32,16 @@ void random_unit_vector(double *nx, double *ny, double *nz) {
     *nz = mu;
 }
 
+void random_isotropic_vector (double *R)
+{
+    double cosT = 1.0 - 2.0 * randu();
+    double sinT = sqrt (1.0 - cosT * cosT);
+    double E = 2.0 * M_PI * randu();
+    R[0] = cosT;
+    R[1] = sinT * cos(E);
+    R[2] = sinT * sin(E);
+}
+
 double rayleigh(double sigma) {
     double u = randu();
     return sigma * sqrt(-2.0 * log(u));
