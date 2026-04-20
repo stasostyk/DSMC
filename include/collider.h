@@ -4,8 +4,8 @@
 #include "particle.h"
 
 int collide_particles(Particle *P,
-                      int cellCount[NX][NY],
-                      int cellList[NX][NY][MAX_PARTICLES_PER_CELL],
+                      int cellCount[NX][NY][NZ],
+                      int cellList[NX][NY][NZ][MAX_PARTICLES_PER_CELL],
                       double weight,
                       double cellVolume);
 
