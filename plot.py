@@ -4,7 +4,9 @@ from matplotlib.patches import Rectangle
 
 filename = "cmake-build-debug/fields_avg.dat"
 
-# columns for file format: x y n ux uy uz T avg_count
+# columns for file format: x y z? n ux uy uz T avg_count
+z_present = True
+
 density_col = 2
 temp_col = 6
 ux_col = 3
@@ -25,6 +27,13 @@ cmap = "viridis"
 
 def load_structured_field(filename, density_col, temp_col, ux_col, uy_col):
     data = np.loadtxt(filename, comments="#")
+
+    # extract only a single z-slice
+    if (z_present):
+        z_val = 0.55;
+        data = data[data[:, 2] == z_val]
+        # remove z column
+        data = np.delete(data, 2, axis=1)
 
     x = data[:, 0]
     y = data[:, 1]

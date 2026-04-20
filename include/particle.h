@@ -4,7 +4,7 @@
 #define DSMC_PARTICLE_H
 
 typedef struct {
-    double x, y;
+    double x, y, z;
     double vx, vy, vz;
 } Particle;
 

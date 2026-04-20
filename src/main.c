@@ -9,9 +9,9 @@
 #include "../include/collider.h"
 
 Particle P[MAX_PARTICLES];
-Cell samples[NX][NY];
-int cellCount[NX][NY];
-int cellList[NX][NY][MAX_PARTICLES_PER_CELL];
+Cell samples[NX][NY][NZ];
+int cellCount[NX][NY][NZ];
+int cellList[NX][NY][NZ][MAX_PARTICLES_PER_CELL];
 
 // counters
 int sampleSteps = 0;
@@ -19,12 +19,12 @@ int NP = 0;
 long long totalCollisions = 0;
 
 // derived quantities
-double dx, dy;
+double dx, dy, dz;
 double cellVolume;
 double weight;
 double NFree;
 double UFree;
-double UxFree, UyFree;
+double UxFree, UyFree, UzFree;
 
 
 
@@ -33,9 +33,10 @@ void setup(void) {
 
     dx = Lx / NX;
     dy = Ly / NY;
-    cellVolume = dx * dy * Lz;
+    dz = Lz / NZ;
+    cellVolume = dx * dy * dz;
 
-    NP = NX * NY * particlesPerCellTarget;
+    NP = NX * NY * NZ * particlesPerCellTarget;
 
     if (NP > MAX_PARTICLES) {
         fprintf(stderr, "Too many particles for MAX_PARTICLES\n");
@@ -46,6 +47,7 @@ void setup(void) {
     UFree = MaFree * sqrt ( ( 5.0 / 3.0 ) * KB * TFree / moleculeMass );
     UxFree = UFree * cos ( M_PI * angleOfAttack / 180.0 );
     UyFree = - UFree * sin ( M_PI * angleOfAttack / 180.0 );
+    UzFree = 0.0;
 
     weight = NFree * cellVolume / particlesPerCellTarget;
 }
@@ -53,22 +55,27 @@ void setup(void) {
 void index_particles(void) {
     for (int k = 0; k < NX; k++) {
         for (int l = 0; l < NY; l++) {
-            cellCount[k][l] = 0;
+            for (int m = 0; m < NZ; m++) {
+                cellCount[k][l][m] = 0;
+            }
         }
     }
 
     for (int i = 0; i < NP; i++) {
         int k = (int)(P[i].x / dx);
         int l = (int)(P[i].y / dy);
+        int m = (int)(P[i].z / dz);
 
         if (k < 0) k = 0;
         if (k >= NX) k = NX - 1;
         if (l < 0) l = 0;
         if (l >= NY) l = NY - 1;
+        if (m < 0) m = 0;
+        if (m >= NZ) m = NZ - 1;
 
-        int n = cellCount[k][l];
-        cellList[k][l][n] = i;
-        cellCount[k][l]++;
+        int n = cellCount[k][l][m];
+        cellList[k][l][m][n] = i;
+        cellCount[k][l][m]++;
     }
 }
 
@@ -104,21 +111,23 @@ void accumulate_sampling(void) {
 
     for (int k = 0; k < NX; k++) {
         for (int l = 0; l < NY; l++) {
-            int Nc = cellCount[k][l];
+            for (int m = 0; m < NZ; m++) {
+                int Nc = cellCount[k][l][m];
 
-            samples[k][l].countNP += Nc;
+                samples[k][l][m].countNP += Nc;
 
-            for (int q = 0; q < Nc; q++) {
-                int i = cellList[k][l][q];
+                for (int q = 0; q < Nc; q++) {
+                    int i = cellList[k][l][m][q];
 
-                double vx = P[i].vx;
-                double vy = P[i].vy;
-                double vz = P[i].vz;
+                    double vx = P[i].vx;
+                    double vy = P[i].vy;
+                    double vz = P[i].vz;
 
-                samples[k][l].countVx += vx;
-                samples[k][l].countVy += vy;
-                samples[k][l].countVz += vz;
-                samples[k][l].countV2 += vx * vx + vy * vy + vz * vz;
+                    samples[k][l][m].countVx += vx;
+                    samples[k][l][m].countVy += vy;
+                    samples[k][l][m].countVz += vz;
+                    samples[k][l][m].countV2 += vx * vx + vy * vy + vz * vz;
+                }
             }
         }
     }
@@ -131,33 +140,37 @@ void write_averaged_macros(const char *filename) {
         exit(1);
     }
 
-    fprintf(fp, "# x y n ux uy uz T avg_count\n");
+    fprintf(fp, "# x y z n ux uy uz T avg_count\n");
 
     for (int k = 0; k < NX; k++) {
         for (int l = 0; l < NY; l++) {
-            double xc = (k + 0.5) * dx;
-            double yc = (l + 0.5) * dy;
+            for (int m = 0; m < NZ; m++) {
+                double xc = (k + 0.5) * dx;
+                double yc = (l + 0.5) * dy;
+                double zc = (m + 0.5) * dz;
 
-            double avgNP = samples[k][l].countNP / sampleSteps;
+                double avgNP = samples[k][l][m].countNP / sampleSteps;
 
-            if (avgNP <= 0.0) {
-                fprintf(fp, "%e %e %e %e %e %e %e %e\n",
-                        xc, yc, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-                continue;
+                if (avgNP <= 0.0) {
+                    fprintf(fp, "%e %e %e %e %e %e %e %e %e\n",
+                            xc, yc, zc, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+                    continue;
+                }
+
+                double ux = samples[k][l][m].countVx / samples[k][l][m].countNP;
+                double uy = samples[k][l][m].countVy / samples[k][l][m].countNP;
+                double uz = samples[k][l][m].countVz / samples[k][l][m].countNP;
+
+                double meanV2 = samples[k][l][m].countV2 / samples[k][l][m].countNP;
+                double meanU2 = ux * ux + uy * uy + uz * uz;
+
+                double n = weight * avgNP / cellVolume;
+                double T = moleculeMass * (meanV2 - meanU2) / (3.0 * KB);
+
+                fprintf(fp, "%e %e %e %e %e %e %e %e %e\n",
+                        xc, yc, zc, n, ux, uy, uz, T, avgNP);
             }
-
-            double ux = samples[k][l].countVx / samples[k][l].countNP;
-            double uy = samples[k][l].countVy / samples[k][l].countNP;
-            double uz = samples[k][l].countVz / samples[k][l].countNP;
-
-            double meanV2 = samples[k][l].countV2 / samples[k][l].countNP;
-            double meanU2 = ux * ux + uy * uy + uz * uz;
-
-            double n = weight * avgNP / cellVolume;
-            double T = moleculeMass * (meanV2 - meanU2) / (3.0 * KB);
-
-            fprintf(fp, "%e %e %e %e %e %e %e %e\n",
-                    xc, yc, n, ux, uy, uz, T, avgNP);
+            fprintf(fp, "\n");
         }
         fprintf(fp, "\n");
     }
@@ -167,11 +180,12 @@ void write_averaged_macros(const char *filename) {
 
 void generate_particles_in_rect(double x1, double x2,
                                 double y1, double y2,
+                                double z1, double z2,
                                 double ngas,
-                                double ux, double uy,
+                                double ux, double uy, double uz,
                                 double Tgas,
                                 int moveFlag) {
-    double V = (x2 - x1) * (y2 - y1) * Lz;
+    double V = (x2 - x1) * (y2 - y1) * (z2 - z1);
     double N_add_exp = ngas * V / weight;
     int Nnew;
     if ( N_add_exp > 20.0 ) { // use uniform approximation if large, poisson if small
@@ -189,14 +203,16 @@ void generate_particles_in_rect(double x1, double x2,
     for (int i = NP; i < NP + Nnew; i++) {
         P[i].x = x1 + (x2 - x1) * randu();
         P[i].y = y1 + (y2 - y1) * randu();
+        P[i].z = z1 + (z2 - z1) * randu();
 
         P[i].vx = randn(ux, sqrt(KB * Tgas / moleculeMass));
         P[i].vy = randn(uy, sqrt(KB * Tgas / moleculeMass));
-        P[i].vz = randn(0.0, sqrt(KB * Tgas / moleculeMass));
+        P[i].vz = randn(uz, sqrt(KB * Tgas / moleculeMass));
 
         if (moveFlag) {
             P[i].x += dt * P[i].vx;
             P[i].y += dt * P[i].vy;
+            P[i].z += dt * P[i].vz;
         }
     }
 
@@ -205,17 +221,20 @@ void generate_particles_in_rect(double x1, double x2,
 
 void initialize_particles(void) {
     NP = 0;
-    generate_particles_in_rect(0.0, Lx, 0.0, Ly, NFree, UxFree, UyFree, TFree, 0);
+    generate_particles_in_rect(0.0, Lx, 0.0, Ly, 0.0, Lz, NFree, UxFree, UyFree, UzFree, TFree, 0);
 }
 
 void apply_boundary_conditions_free_stream() {
-    generate_particles_in_rect(-DL, 0.0, 0.0, Ly, NFree, UxFree, UyFree, TFree, 1);
-    generate_particles_in_rect(Lx, Lx + DL, 0.0, Ly, NFree, UxFree, UyFree, TFree, 1);
-    generate_particles_in_rect(0.0, Lx, -DL, 0.0, NFree, UxFree, UyFree, TFree, 1);
-    generate_particles_in_rect(0.0, Lx, Ly, Ly + DL, NFree, UxFree, UyFree, TFree, 1);
+    generate_particles_in_rect(-DL, 0.0, 0.0, Ly, 0.0, Lz, NFree, UxFree, UyFree, UzFree, TFree, 1);
+    generate_particles_in_rect(Lx, Lx + DL, 0.0, Ly, 0.0, Lz, NFree, UxFree, UyFree, UzFree, TFree, 1);
+    generate_particles_in_rect(0.0, Lx, -DL, 0.0, 0.0, Lz, NFree, UxFree, UyFree, UzFree, TFree, 1);
+    generate_particles_in_rect(0.0, Lx, Ly, Ly + DL, 0.0, Lz, NFree, UxFree, UyFree, UzFree, TFree, 1);
+    generate_particles_in_rect(0.0, Lx, 0.0, Ly, -DL, 0.0, NFree, UxFree, UyFree, UzFree, TFree, 1);
+    generate_particles_in_rect(0.0, Lx, 0.0, Ly, Lz, Lz + DL, NFree, UxFree, UyFree, UzFree, TFree, 1);
+
 
     for (int i = 0; i < NP; i++) {
-        if (P[i].x < 0.0 || P[i].x >= Lx || P[i].y < 0.0 || P[i].y >= Ly) {
+        if (P[i].x < 0.0 || P[i].x >= Lx || P[i].y < 0.0 || P[i].y >= Ly || P[i].z < 0.0 || P[i].z >= Lz) {
             P[i] = P[NP - 1];
             NP--;
             i--;
@@ -227,13 +246,17 @@ void move_particles(void) {
     for (int i = 0; i < NP; i++) {
         double X0 = P[i].x;
         double Y0 = P[i].y;
+        double Z0 = P[i].z;
         P[i].x += dt * P[i].vx;
         P[i].y += dt * P[i].vy;
+        P[i].z += dt * P[i].vz;
 
 
         if ( ( Y0 - WingY ) * ( P[i].y - WingY ) < 0.0 ) {
 // Linear interpolation to point Y = WingY
             double Xw=( X0*(WingY-P[i].y)+P[i].x*(Y0-WingY))/(Y0-P[i].y);
+            double Zw=( Z0*(WingY-P[i].y)+P[i].z*(Y0-WingY))/(Y0-P[i].y);
+            if ( Zw < 0.3 || Zw > 0.7 ) continue; // wing only occupies 0.3 < z < 0.7
             if ( Xw > WingX && Xw < WingX + WingLength ) {
 // Molecule interacts with the wing during the time step
 // Linear interpolation of the time of scattering, Eq. (6.5.4)

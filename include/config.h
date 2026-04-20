@@ -1,10 +1,11 @@
 #ifndef DSMC_CONFIG_H
 #define DSMC_CONFIG_H
 
-#define MAX_PARTICLES 200000
-#define MAX_PARTICLES_PER_CELL 1000
-#define NX 20
-#define NY 20
+#define MAX_PARTICLES 500000
+#define MAX_PARTICLES_PER_CELL 2000
+#define NX 10
+#define NY 10
+#define NZ 10
 
 extern const double KB;
 extern const double NA;
@@ -17,13 +18,6 @@ extern const double DL;
 
 // gas properties
 extern const double molarMass;
-// hard sphere assumption
-extern const double diameter;
-
-// initial velocity (m/s)
-extern const double ux0;
-extern const double uy0;
-extern const double uz0;
 
 // simulation loop parameters
 extern const double dt;

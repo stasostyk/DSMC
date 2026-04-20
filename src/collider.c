@@ -63,16 +63,18 @@ int noTimeCounterScheme(Particle *P, int NPC, int *IPC, double weight, double ce
     return collisions;
 }
 
-int collide_particles(Particle *P, int cellCount[NX][NY], int cellList[NX][NY][MAX_PARTICLES_PER_CELL], double weight, double cellVolume) {
+int collide_particles(Particle *P, int cellCount[NX][NY][NZ], int cellList[NX][NY][NZ][MAX_PARTICLES_PER_CELL], double weight, double cellVolume) {
     int totalCollisions = 0;
     for (int k = 0; k < NX; k++) {
         for (int l = 0; l < NY; l++) {
-            int collisions = noTimeCounterScheme(P,
-                                                 cellCount[k][l],
-                                                 cellList[k][l],
-                                                 weight,
-                                                 cellVolume);
-            totalCollisions += collisions;
+            for (int m = 0; m < NZ; m++) {
+                int collisions = noTimeCounterScheme(P,
+                                                     cellCount[k][l][m],
+                                                     cellList[k][l][m],
+                                                     weight,
+                                                     cellVolume);
+                totalCollisions += collisions;
+            }
         }
     }
     return totalCollisions;
