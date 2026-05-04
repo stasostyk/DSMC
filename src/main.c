@@ -7,6 +7,7 @@
 #include "../include/particle.h"
 #include "../include/math_utils.h"
 #include "../include/collider.h"
+#include "../include/config.h"
 
 Particle P[MAX_PARTICLES];
 Cell samples[NX][NY][NZ];

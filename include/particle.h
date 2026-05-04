@@ -1,5 +1,3 @@
-#include "config.h"
-
 #ifndef DSMC_PARTICLE_H
 #define DSMC_PARTICLE_H
 
