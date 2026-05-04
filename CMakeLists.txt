@@ -3,5 +3,10 @@ project(DSMC C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(DSMC src/main.c include/particle.h include/config.h include/cell.h src/math_utils.c include/math_utils.h src/config.c src/collider.c include/collider.h)
+add_executable(DSMC 
+    src/main.c 
+    src/math_utils.c 
+    src/config.c 
+    src/collider.c 
+)
 target_link_libraries(DSMC PRIVATE m)
