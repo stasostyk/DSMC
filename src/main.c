@@ -26,9 +26,9 @@ double NFree;
 double UFree;
 double UxFree, UyFree, UzFree;
 
-
-
 void setup(void) {
+    // TODO: most of the setup can be moved to constexpr??
+
     memset(samples, 0, sizeof(samples));
 
     dx = Lx / NX;
@@ -205,7 +205,7 @@ void generate_particles_in_rect(double x1, double x2,
         P[i].y = y1 + (y2 - y1) * randu();
         P[i].z = z1 + (z2 - z1) * randu();
 
-        P[i].vx = randn(ux, sqrt(KB * Tgas / moleculeMass));
+        P[i].vx = randn(ux, sqrt(KB * Tgas / moleculeMass)); // TODO don't calc sqrt every time
         P[i].vy = randn(uy, sqrt(KB * Tgas / moleculeMass));
         P[i].vz = randn(uz, sqrt(KB * Tgas / moleculeMass));
 
@@ -253,17 +253,17 @@ void move_particles(void) {
 
 
         if ( ( Y0 - WingY ) * ( P[i].y - WingY ) < 0.0 ) {
-// Linear interpolation to point Y = WingY
+            // Linear interpolation to point Y = WingY
             double Xw=( X0*(WingY-P[i].y)+P[i].x*(Y0-WingY))/(Y0-P[i].y);
             double Zw=( Z0*(WingY-P[i].y)+P[i].z*(Y0-WingY))/(Y0-P[i].y);
             if ( Zw < 0.3 || Zw > 0.7 ) continue; // wing only occupies 0.3 < z < 0.7
             if ( Xw > WingX && Xw < WingX + WingLength ) {
-// Molecule interacts with the wing during the time step
-// Linear interpolation of the time of scattering, Eq. (6.5.4)
+                // Molecule interacts with the wing during the time step
+                // Linear interpolation of the time of scattering, Eq. (6.5.4)
                 double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P[i].y );
-// Generate velocity vector of the reflected molecule
+                // Generate velocity vector of the reflected molecule
                 diffuse_scattering_y(&P[i].vx, &P[i].vy, &P[i].vz, moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0));
-// Move the reflected molecule
+                // Move the reflected molecule
                 P[i].x = Xw + Dt1 * P[i].vx;
                 P[i].y = WingY + Dt1 * P[i].vy;
             }
@@ -273,6 +273,145 @@ void move_particles(void) {
 
 }
 
+void write_vti(const char *filename) {
+    FILE *fp = fopen(filename, "w");
+    if (!fp) {
+        fprintf(stderr, "Could not open VTI file\n");
+        exit(1);
+    }
+
+    fprintf(fp, "<?xml version=\"1.0\"?>\n");
+    fprintf(fp, "<VTKFile type=\"ImageData\" version=\"0.1\" byte_order=\"LittleEndian\">\n");
+
+    fprintf(fp, "<ImageData WholeExtent=\"0 %d 0 %d 0 %d\" Origin=\"0 0 0\" Spacing=\"%e %e %e\">\n",
+            NX, NY, NZ, dx, dy, dz);
+
+    fprintf(fp, "<CellData Scalars=\"density\">\n");
+
+    // Density
+    fprintf(fp, "<DataArray type=\"Float64\" Name=\"density\" format=\"ascii\">\n");
+    for (int m = 0; m < NZ; m++) {
+        for (int l = 0; l < NY; l++) {
+            for (int k = 0; k < NX; k++) {
+                double avgNP = samples[k][l][m].countNP / sampleSteps;
+                double n = (avgNP > 0.0) ? weight * avgNP / cellVolume : 0.0;
+                fprintf(fp, "%e ", n);
+            }
+        }
+    }
+    fprintf(fp, "\n</DataArray>\n");
+
+    // Velocity
+    fprintf(fp, "<DataArray type=\"Float64\" Name=\"velocity\" NumberOfComponents=\"3\" format=\"ascii\">\n");
+    for (int m = 0; m < NZ; m++) {
+        for (int l = 0; l < NY; l++) {
+            for (int k = 0; k < NX; k++) {
+                double count = samples[k][l][m].countNP;
+
+                double ux = 0.0, uy = 0.0, uz = 0.0;
+                if (count > 0.0) {
+                    ux = samples[k][l][m].countVx / count;
+                    uy = samples[k][l][m].countVy / count;
+                    uz = samples[k][l][m].countVz / count;
+                }
+
+                fprintf(fp, "%e %e %e ", ux, uy, uz);
+            }
+        }
+    }
+    fprintf(fp, "\n</DataArray>\n");
+
+    // Temperature
+    fprintf(fp, "<DataArray type=\"Float64\" Name=\"temperature\" format=\"ascii\">\n");
+    for (int m = 0; m < NZ; m++) {
+        for (int l = 0; l < NY; l++) {
+            for (int k = 0; k < NX; k++) {
+                double count = samples[k][l][m].countNP;
+
+                double T = 0.0;
+                if (count > 0.0) {
+                    double ux = samples[k][l][m].countVx / count;
+                    double uy = samples[k][l][m].countVy / count;
+                    double uz = samples[k][l][m].countVz / count;
+
+                    double meanV2 = samples[k][l][m].countV2 / count;
+                    double meanU2 = ux*ux + uy*uy + uz*uz;
+
+                    T = moleculeMass * (meanV2 - meanU2) / (3.0 * KB);
+                }
+
+                fprintf(fp, "%e ", T);
+            }
+        }
+    }
+    fprintf(fp, "\n</DataArray>\n");
+
+    fprintf(fp, "</CellData>\n");
+    fprintf(fp, "</ImageData>\n");
+    fprintf(fp, "</VTKFile>\n");
+
+    fclose(fp);
+}
+
+void write_wing_vtp(const char *filename) {
+    FILE *fp = fopen(filename, "w");
+    if (!fp) {
+        fprintf(stderr, "Could not open wing file\n");
+        exit(1);
+    }
+
+    double x0 = WingX;
+    double x1 = WingX + WingLength;
+    double y  = WingY;
+    double z0 = 0.3;
+    double z1 = 0.7;
+
+    fprintf(fp, "<?xml version=\"1.0\"?>\n");
+    fprintf(fp, "<VTKFile type=\"PolyData\" version=\"0.1\" byte_order=\"LittleEndian\">\n");
+    fprintf(fp, "<PolyData>\n");
+
+    fprintf(fp, "<Piece NumberOfPoints=\"4\" NumberOfPolys=\"1\">\n");
+
+    // Points
+    fprintf(fp, "<Points>\n");
+    fprintf(fp, "<DataArray type=\"Float64\" NumberOfComponents=\"3\" format=\"ascii\">\n");
+    fprintf(fp, "%e %e %e\n", x0, y, z0);
+    fprintf(fp, "%e %e %e\n", x1, y, z0);
+    fprintf(fp, "%e %e %e\n", x1, y, z1);
+    fprintf(fp, "%e %e %e\n", x0, y, z1);
+    fprintf(fp, "</DataArray>\n");
+    fprintf(fp, "</Points>\n");
+
+    // One quad (4 vertices)
+    fprintf(fp, "<Polys>\n");
+
+    fprintf(fp, "<DataArray type=\"Int32\" Name=\"connectivity\" format=\"ascii\">\n");
+    fprintf(fp, "0 1 2 3\n");
+    fprintf(fp, "</DataArray>\n");
+
+    fprintf(fp, "<DataArray type=\"Int32\" Name=\"offsets\" format=\"ascii\">\n");
+    fprintf(fp, "4\n");
+    fprintf(fp, "</DataArray>\n");
+
+    fprintf(fp, "</Polys>\n");
+
+    fprintf(fp, "</Piece>\n");
+    fprintf(fp, "</PolyData>\n");
+    fprintf(fp, "</VTKFile>\n");
+
+    fclose(fp);
+}
+
+void write_paraview_files(unsigned int step) {
+    char fname[64];
+    sprintf(fname, "paraview_fields_%05d.vti", step);
+    write_vti(fname);
+
+    char wing_fname[64];
+    sprintf(wing_fname, "paraview_wing_%05d.vtp", step);
+    write_wing_vtp(wing_fname);
+}
+
 int main(void) {
     srand((unsigned int)time(NULL));
 
@@ -280,7 +419,7 @@ int main(void) {
     collider_setup();
     initialize_particles();
 
-    for (int step = 0; step <= nSteps; step++) {
+    for (int step = 0; step < nSteps; step++) {
         move_particles();
         apply_boundary_conditions_free_stream();
         index_particles();
@@ -296,7 +435,12 @@ int main(void) {
         }
     }
 
+    print_global_diagnostics(nSteps);
+    printf("totalCollisions = %lld\n", totalCollisions);
+
     write_averaged_macros("fields_avg.dat");
+
+    write_paraview_files(nSteps);
 
     return 0;
 }
