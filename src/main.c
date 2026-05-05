@@ -6,10 +6,11 @@
 #include "../include/simulation.h"
 #include "../include/io_utils.h"
 
-Simulation sim;
 
 int main(void) {
     srand((unsigned int)time(NULL));
+    
+    Simulation sim;
 
     #ifdef WING_CASE
         printf("Running Wing case.\n");
@@ -44,7 +45,7 @@ int main(void) {
     print_global_diagnostics(&sim, nSteps);
     write_averaged_macros(&sim, "fields_avg.dat");
     write_paraview_files(&sim, nSteps);
-    
+
     clearPointers(&sim);
 
     return 0;

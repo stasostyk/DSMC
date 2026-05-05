@@ -50,7 +50,7 @@ void write_averaged_macros(Simulation *sim, const char *filename) {
                 double yc = (l + 0.5) * sim->dy;
                 double zc = (m + 0.5) * sim->dz;
 
-                double avgNP = sim->samples[k][l][m].countNP / sim->sampleSteps;
+                double avgNP = sim->samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
 
                 if (avgNP <= 0.0) {
                     fprintf(fp, "%e %e %e %e %e %e %e %e %e\n",
@@ -58,11 +58,13 @@ void write_averaged_macros(Simulation *sim, const char *filename) {
                     continue;
                 }
 
-                double ux = sim->samples[k][l][m].countVx / sim->samples[k][l][m].countNP;
-                double uy = sim->samples[k][l][m].countVy / sim->samples[k][l][m].countNP;
-                double uz = sim->samples[k][l][m].countVz / sim->samples[k][l][m].countNP;
+                double count = sim->samples[IDX_CELL(k, l, m)].countNP;
 
-                double meanV2 = sim->samples[k][l][m].countV2 / sim->samples[k][l][m].countNP;
+                double ux = sim->samples[IDX_CELL(k, l, m)].countVx / count;
+                double uy = sim->samples[IDX_CELL(k, l, m)].countVy / count;
+                double uz = sim->samples[IDX_CELL(k, l, m)].countVz / count;
+
+                double meanV2 = sim->samples[IDX_CELL(k, l, m)].countV2 / count;
                 double meanU2 = ux * ux + uy * uy + uz * uz;
 
                 double n = sim->weight * avgNP / sim->cellVolume;
@@ -99,7 +101,7 @@ void write_vti(Simulation *sim, const char *filename) {
     for (int m = 0; m < NZ; m++) {
         for (int l = 0; l < NY; l++) {
             for (int k = 0; k < NX; k++) {
-                double avgNP = sim->samples[k][l][m].countNP / sim->sampleSteps;
+                double avgNP = sim->samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
                 double n = (avgNP > 0.0) ? sim->weight * avgNP / sim->cellVolume : 0.0;
                 fprintf(fp, "%e ", n);
             }
@@ -112,13 +114,13 @@ void write_vti(Simulation *sim, const char *filename) {
     for (int m = 0; m < NZ; m++) {
         for (int l = 0; l < NY; l++) {
             for (int k = 0; k < NX; k++) {
-                double count = sim->samples[k][l][m].countNP;
+                double count = sim->samples[IDX_CELL(k, l, m)].countNP;
 
                 double ux = 0.0, uy = 0.0, uz = 0.0;
                 if (count > 0.0) {
-                    ux = sim->samples[k][l][m].countVx / count;
-                    uy = sim->samples[k][l][m].countVy / count;
-                    uz = sim->samples[k][l][m].countVz / count;
+                    ux = sim->samples[IDX_CELL(k, l, m)].countVx / count;
+                    uy = sim->samples[IDX_CELL(k, l, m)].countVy / count;
+                    uz = sim->samples[IDX_CELL(k, l, m)].countVz / count;
                 }
 
                 fprintf(fp, "%e %e %e ", ux, uy, uz);
@@ -132,15 +134,15 @@ void write_vti(Simulation *sim, const char *filename) {
     for (int m = 0; m < NZ; m++) {
         for (int l = 0; l < NY; l++) {
             for (int k = 0; k < NX; k++) {
-                double count = sim->samples[k][l][m].countNP;
+                double count = sim->samples[IDX_CELL(k, l, m)].countNP;
 
                 double T = 0.0;
                 if (count > 0.0) {
-                    double ux = sim->samples[k][l][m].countVx / count;
-                    double uy = sim->samples[k][l][m].countVy / count;
-                    double uz = sim->samples[k][l][m].countVz / count;
+                    double ux = sim->samples[IDX_CELL(k, l, m)].countVx / count;
+                    double uy = sim->samples[IDX_CELL(k, l, m)].countVy / count;
+                    double uz = sim->samples[IDX_CELL(k, l, m)].countVz / count;
 
-                    double meanV2 = sim->samples[k][l][m].countV2 / count;
+                    double meanV2 = sim->samples[IDX_CELL(k, l, m)].countV2 / count;
                     double meanU2 = ux*ux + uy*uy + uz*uz;
 
                     T = moleculeMass * (meanV2 - meanU2) / (3.0 * KB);

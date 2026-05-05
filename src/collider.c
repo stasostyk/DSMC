@@ -2,6 +2,7 @@
 #include "../include/config.h"
 #include "../include/math_utils.h"
 #include "../include/particle.h"
+#include "../include/simulation.h"
 #include <math.h>
 
 double sigmaRef;
@@ -63,14 +64,20 @@ int noTimeCounterScheme(Particle *P, int NPC, int *IPC, double weight, double ce
     return collisions;
 }
 
-int collide_particles(Particle *P, int cellCount[NX][NY][NZ], int cellList[NX][NY][NZ][MAX_PARTICLES_PER_CELL], double weight, double cellVolume) {
+int collide_particles(
+    Particle *P, 
+    int *cellCount,
+    int *cellList, 
+    double weight, 
+    double cellVolume
+) {
     int totalCollisions = 0;
     for (int k = 0; k < NX; k++) {
         for (int l = 0; l < NY; l++) {
             for (int m = 0; m < NZ; m++) {
                 int collisions = noTimeCounterScheme(P,
-                                                     cellCount[k][l][m],
-                                                     cellList[k][l][m],
+                                                     cellCount[IDX_CELL(k, l, m)],
+                                                     &cellList[IDX_LIST(k, l, m, 0)],
                                                      weight,
                                                      cellVolume);
                 totalCollisions += collisions;

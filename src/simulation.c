@@ -7,12 +7,10 @@
 #include "../include/math_utils.h"
 
 void setup(Simulation *sim) {
-    // 
-    // Particle P[MAX_PARTICLES];
-    // Cell samples[NX][NY][NZ];
-    // int cellCount[NX][NY][NZ];
-    // int cellList[NX][NY][NZ][MAX_PARTICLES_PER_CELL];
-
+    sim->P = malloc(MAX_PARTICLES * sizeof(Particle));
+    sim->samples = malloc(NX * NY * NZ * sizeof(Cell));
+    sim->cellCount = malloc(NX * NY * NZ * sizeof(int));
+    sim->cellList = malloc(NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int));
 
     sim->sampleSteps = 0;
     sim->NP = 0;
@@ -50,7 +48,7 @@ void index_particles(Simulation *sim) {
     for (int k = 0; k < NX; k++) {
         for (int l = 0; l < NY; l++) {
             for (int m = 0; m < NZ; m++) {
-                sim->cellCount[k][l][m] = 0;
+                sim->cellCount[IDX_CELL(k, l, m)] = 0;
             }
         }
     }
@@ -67,9 +65,9 @@ void index_particles(Simulation *sim) {
         if (m < 0) m = 0;
         if (m >= NZ) m = NZ - 1;
 
-        int n = sim->cellCount[k][l][m];
-        sim->cellList[k][l][m][n] = i;
-        sim->cellCount[k][l][m]++;
+        int n = sim->cellCount[IDX_CELL(k, l, m)];
+        sim->cellList[IDX_LIST(k, l, m, n)] = i;
+        sim->cellCount[IDX_CELL(k, l, m)]++;
     }
 }
 
@@ -253,21 +251,21 @@ void accumulate_sampling(Simulation *sim) {
     for (int k = 0; k < NX; k++) {
         for (int l = 0; l < NY; l++) {
             for (int m = 0; m < NZ; m++) {
-                int Nc = sim->cellCount[k][l][m];
+                int Nc = sim->cellCount[IDX_CELL(k, l, m)];
 
-                sim->samples[k][l][m].countNP += Nc;
+                sim->samples[IDX_CELL(k, l, m)].countNP += Nc;
 
                 for (int q = 0; q < Nc; q++) {
-                    int i = sim->cellList[k][l][m][q];
+                    int i = sim->cellList[IDX_LIST(k, l, m, q)];
 
                     double vx = sim->P[i].vx;
                     double vy = sim->P[i].vy;
                     double vz = sim->P[i].vz;
 
-                    sim->samples[k][l][m].countVx += vx;
-                    sim->samples[k][l][m].countVy += vy;
-                    sim->samples[k][l][m].countVz += vz;
-                    sim->samples[k][l][m].countV2 += vx * vx + vy * vy + vz * vz;
+                    sim->samples[IDX_CELL(k, l, m)].countVx += vx;
+                    sim->samples[IDX_CELL(k, l, m)].countVy += vy;
+                    sim->samples[IDX_CELL(k, l, m)].countVz += vz;
+                    sim->samples[IDX_CELL(k, l, m)].countV2 += vx * vx + vy * vy + vz * vz;
                 }
             }
         }
@@ -275,5 +273,8 @@ void accumulate_sampling(Simulation *sim) {
 }
 
 void clearPointers(Simulation *sim) {
-
+    free(sim->P);
+    free(sim->samples);
+    free(sim->cellCount);
+    free(sim->cellList);
 }

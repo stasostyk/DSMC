@@ -5,11 +5,14 @@
 #include "cell.h"
 #include "config.h"
 
+#define IDX_CELL(k, l, m) ((k)*NY*NZ + (l)*NZ + m)
+#define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + q)
+
 typedef struct {
-    Particle P[MAX_PARTICLES];
-    Cell samples[NX][NY][NZ];
-    int cellCount[NX][NY][NZ];
-    int cellList[NX][NY][NZ][MAX_PARTICLES_PER_CELL];
+    Particle *P;
+    Cell *samples;
+    int *cellCount;
+    int *cellList;
 
     // counters
     int sampleSteps;
