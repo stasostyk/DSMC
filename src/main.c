@@ -5,9 +5,15 @@
 #include "../include/collider.h"
 #include "../include/simulation.h"
 #include "../include/io_utils.h"
+#include "../include/timer.h"
 
 
 int main(void) {
+    Timer t, allProgramTimer;
+
+    timer_start(&allProgramTimer);
+    timer_start(&t);
+
     srand((unsigned int)time(NULL));
     
     Simulation sim;
@@ -26,6 +32,10 @@ int main(void) {
     setup(&sim, &conf);
     initialize_particles(&sim, &conf);
 
+    timer_end(&t);
+    timer_print(&t, "INITIALIZATION");
+    timer_start(&t);
+
     for (int step = 0; step < conf.nSteps; step++) {
         move_particles(&sim, &conf);
         apply_boundary_conditions_free_stream(&sim, &conf);
@@ -43,11 +53,17 @@ int main(void) {
         }
     }
 
+    timer_end(&t);
+    timer_print(&t, "SIMULATION LOOP");
+
     print_global_diagnostics(&sim, &conf, conf.nSteps);
     write_averaged_macros(&sim, &conf, "fields_avg.dat");
     write_paraview_files(&sim, &conf, conf.nSteps);
 
     clearPointers(&sim);
+
+    timer_end(&allProgramTimer);
+    timer_print(&allProgramTimer, "ALL PROGRAM FINISHED");
 
     return 0;
 }

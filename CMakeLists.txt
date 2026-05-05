@@ -10,6 +10,7 @@ set(SOURCES
     src/collider.c 
     src/simulation.c
     src/io_utils.c
+    src/timer.c
 )
 
 # Executable for Wing case
