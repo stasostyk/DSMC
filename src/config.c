@@ -14,23 +14,37 @@ const double molarMass = 0.040;
 
 // simulation loop parameters
 const double dt = 1.0e-5;
-const int nSteps = 4000;
+const int nSteps = 2000;
 const int printPeriod = 200;
 const int particlesPerCellTarget = 200;
 const int firstSampleStep = 1000;
 const int samplingPeriod = 10;
 
-// wing
-const double WingX = 0.3; // X coordinate of the wing leading edge (m)
-const double WingY = 0.5; // Y coordinate of the wing leading edge (m)
-const double WingLength = 0.2; // Length of the wing (m)
-const double Tw = 300.0; // Temperature of the wing surface (K
+#ifdef WING_CASE
+    // wing
+    const double WingX = 0.3; // X coordinate of the wing leading edge (m)
+    const double WingY = 0.5; // Y coordinate of the wing leading edge (m)
+    const double WingLength = 0.2; // Length of the wing (m)
+    const double Tw = 300.0; // Temperature of the wing surface (K)
 
-// stream
-const double MaFree = 4.0; // Free stream Mach number
-const double PFree = 0.1; // Free stream pressure (Pa)
-const double TFree = 200.0; // Free stream temperature (K)
-const double angleOfAttack = 30.0; // Angle of attack (degrees)
+    // stream
+    const double MaFree = 4.0; // Free stream Mach number
+    const double PFree = 0.1; // Free stream pressure (Pa)
+    const double TFree = 200.0; // Free stream temperature (K)
+    const double angleOfAttack = 30.0; // Angle of attack (degrees)
+#elif defined(BALL_CASE)
+    // ball 
+    const double ballCenterX = 0.6; // in m
+    const double ballCenterY = 0.6; // in m
+    const double ballCenterZ = 0.5; // in m
+    const double ballRadius = 0.15; // in m
+    const double Tb = 300.0; // Temperature of the ball surface (K)
+
+    // stream
+    const double MaFree = 4.0; // Free stream Mach number
+    const double PFree = 0.1; // Free stream pressure (Pa)
+    const double TFree = 200.0; // Free stream temperature (K)
+#endif
 
 // VHS model
 const double omega = 0.77;          // or ~0.74 to 0.77 for air-like species

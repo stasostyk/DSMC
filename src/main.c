@@ -44,6 +44,9 @@ void setup(void) {
         exit(1);
     }
 
+    #ifdef BALL_CASE
+        double angleOfAttack = 0.;
+    #endif
     NFree = PFree / ( KB * TFree );
     UFree = MaFree * sqrt ( ( 5.0 / 3.0 ) * KB * TFree / moleculeMass );
     UxFree = UFree * cos ( M_PI * angleOfAttack / 180.0 );
@@ -253,6 +256,7 @@ void move_particles(void) {
         P[i].z += dt * P[i].vz;
 
 
+        #ifdef WING_CASE
         if ( ( Y0 - WingY ) * ( P[i].y - WingY ) < 0.0 ) {
             // Linear interpolation to point Y = WingY
             double Xw=( X0*(WingY-P[i].y)+P[i].x*(Y0-WingY))/(Y0-P[i].y);
@@ -269,6 +273,75 @@ void move_particles(void) {
                 P[i].y = WingY + Dt1 * P[i].vy;
             }
         }
+        #elif defined(BALL_CASE)
+        // Ray-sphere intersection test
+        {
+            // Initial and final positions
+            double x0 = X0, y0 = Y0, z0 = Z0;
+            double x1 = P[i].x, y1 = P[i].y, z1 = P[i].z;
+
+            // Direction of motion
+            double dx = x1 - x0;
+            double dy = y1 - y0;
+            double dz = z1 - z0;
+
+            // Sphere center
+            double cx = ballCenterX;
+            double cy = ballCenterY;
+            double cz = ballCenterZ;
+
+            // Shifted initial position
+            double rx = x0 - cx;
+            double ry = y0 - cy;
+            double rz = z0 - cz;
+
+            // Quadratic coefficients: |r + t d|^2 = R^2
+            double a = dx*dx + dy*dy + dz*dz;
+            double b = 2.0 * (rx*dx + ry*dy + rz*dz);
+            double c = rx*rx + ry*ry + rz*rz - ballRadius*ballRadius;
+
+            double disc = b*b - 4.0*a*c;
+
+            if (disc >= 0.0) {
+                double sqrt_disc = sqrt(disc);
+
+                // time solutions
+                double t1 = (-b - sqrt_disc) / (2.0*a);
+                double t2 = (-b + sqrt_disc) / (2.0*a);
+
+                // pick earliest valid intersection in [0,1]
+                double t_hit = -1.0;
+                if (t1 >= 0.0 && t1 <= 1.0) t_hit = t1;
+                else if (t2 >= 0.0 && t2 <= 1.0) t_hit = t2;
+
+                if (t_hit >= 0.0) {
+                    // Intersection point
+                    double Xw = x0 + t_hit * dx;
+                    double Yw = y0 + t_hit * dy;
+                    double Zw = z0 + t_hit * dz;
+
+                    // Remaining time after collision
+                    double Dt1 = dt * (1.0 - t_hit);
+
+                    // Surface normal (outward)
+                    double nx = (Xw - cx) / ballRadius;
+                    double ny = (Yw - cy) / ballRadius;
+                    double nz = (Zw - cz) / ballRadius;
+
+                    // Diffuse reflection aligned with normal
+                    diffuse_scattering(&P[i].vx, &P[i].vy, &P[i].vz,
+                                    moleculeMass, Tb,
+                                    nx, ny, nz);
+
+                    // Move after collision
+                    P[i].x = Xw + Dt1 * P[i].vx;
+                    P[i].y = Yw + Dt1 * P[i].vy;
+                    P[i].z = Zw + Dt1 * P[i].vz;
+                }
+            }
+        }
+
+        #endif
     }
 
 
@@ -354,6 +427,7 @@ void write_vti(const char *filename) {
     fclose(fp);
 }
 
+#ifdef WING_CASE
 void write_wing_vtp(const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
@@ -402,19 +476,122 @@ void write_wing_vtp(const char *filename) {
 
     fclose(fp);
 }
+#endif
+
+#ifdef BALL_CASE
+void write_ball_vtp(const char *filename) {
+    FILE *fp = fopen(filename, "w");
+    if (!fp) {
+        fprintf(stderr, "Could not open ball output file\n");
+        exit(1);
+    }
+
+    int n_theta = 30;
+    int n_phi = 30;
+
+    int num_points = (n_theta + 1) * (n_phi + 1);
+    int num_tris   = n_theta * n_phi * 2;
+
+    fprintf(fp, "<?xml version=\"1.0\"?>\n");
+    fprintf(fp, "<VTKFile type=\"PolyData\" version=\"0.1\" byte_order=\"LittleEndian\">\n");
+    fprintf(fp, "<PolyData>\n");
+
+    fprintf(fp, "<Piece NumberOfPoints=\"%d\" NumberOfPolys=\"%d\">\n",
+            num_points, num_tris);
+
+    // --- POINTS ---
+    fprintf(fp, "<Points>\n");
+    fprintf(fp, "<DataArray type=\"Float64\" NumberOfComponents=\"3\" format=\"ascii\">\n");
+
+    for (int i = 0; i <= n_theta; i++) {
+        double theta = M_PI * i / n_theta;  // 0 -> pi
+
+        for (int j = 0; j <= n_phi; j++) {
+            double phi = 2.0 * M_PI * j / n_phi; // 0 -> 2pi
+
+            double x = ballCenterX + ballRadius * sin(theta) * cos(phi);
+            double y = ballCenterY + ballRadius * sin(theta) * sin(phi);
+            double z = ballCenterZ + ballRadius * cos(theta);
+
+            fprintf(fp, "%e %e %e\n", x, y, z);
+        }
+    }
+
+    fprintf(fp, "</DataArray>\n");
+    fprintf(fp, "</Points>\n");
+
+    // --- TRIANGLES ---
+    fprintf(fp, "<Polys>\n");
+
+    // connectivity
+    fprintf(fp, "<DataArray type=\"Int32\" Name=\"connectivity\" format=\"ascii\">\n");
+
+    for (int i = 0; i < n_theta; i++) {
+        for (int j = 0; j < n_phi; j++) {
+
+            int p0 = i * (n_phi + 1) + j;
+            int p1 = p0 + 1;
+            int p2 = p0 + (n_phi + 1);
+            int p3 = p2 + 1;
+
+            // triangle 1
+            fprintf(fp, "%d %d %d\n", p0, p2, p1);
+
+            // triangle 2
+            fprintf(fp, "%d %d %d\n", p1, p2, p3);
+        }
+    }
+
+    fprintf(fp, "</DataArray>\n");
+
+    // offsets
+    fprintf(fp, "<DataArray type=\"Int32\" Name=\"offsets\" format=\"ascii\">\n");
+
+    int offset = 0;
+    for (int i = 0; i < num_tris; i++) {
+        offset += 3;
+        fprintf(fp, "%d\n", offset);
+    }
+
+    fprintf(fp, "</DataArray>\n");
+
+    fprintf(fp, "</Polys>\n");
+
+    fprintf(fp, "</Piece>\n");
+    fprintf(fp, "</PolyData>\n");
+    fprintf(fp, "</VTKFile>\n");
+
+    fclose(fp);
+}
+#endif
 
 void write_paraview_files(unsigned int step) {
     char fname[64];
     sprintf(fname, "paraview_fields_%05d.vti", step);
     write_vti(fname);
 
-    char wing_fname[64];
-    sprintf(wing_fname, "paraview_wing_%05d.vtp", step);
-    write_wing_vtp(wing_fname);
+    #ifdef WING_CASE
+        char wing_fname[64];
+        sprintf(wing_fname, "paraview_wing_%05d.vtp", step);
+        write_wing_vtp(wing_fname);
+    #elif defined(BALL_CASE)
+        char ball_fname[64];
+        sprintf(ball_fname, "paraview_ball_%05d.vtp", step);
+        write_ball_vtp(ball_fname);
+    #endif
 }
 
 int main(void) {
     srand((unsigned int)time(NULL));
+
+    #ifdef WING_CASE
+        printf("Running Wing case.\n");
+    #elif defined(BALL_CASE)
+        printf("Running Ball case.\n");
+    #else
+        print("No case selected. Aborting.\n");
+        return 0;
+    #endif
 
     setup();
     collider_setup();
