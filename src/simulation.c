@@ -6,7 +6,7 @@
 #include "../include/config.h"
 #include "../include/math_utils.h"
 
-void setup(Simulation *sim) {
+void setup(Simulation *sim, Config *conf) {
     sim->P = malloc(MAX_PARTICLES * sizeof(Particle));
     sim->samples = malloc(NX * NY * NZ * sizeof(Cell));
     sim->cellCount = malloc(NX * NY * NZ * sizeof(int));
@@ -20,28 +20,30 @@ void setup(Simulation *sim) {
 
     memset(sim->samples, 0, sizeof(sim->samples));
 
-    sim->dx = Lx / NX;
-    sim->dy = Ly / NY;
-    sim->dz = Lz / NZ;
+    sim->dx = conf->Lx / NX;
+    sim->dy = conf->Ly / NY;
+    sim->dz = conf->Lz / NZ;
     sim->cellVolume = sim->dx * sim->dy * sim->dz;
 
-    sim->NP = NX * NY * NZ * particlesPerCellTarget;
+    sim->NP = NX * NY * NZ * conf->particlesPerCellTarget;
 
     if (sim->NP > MAX_PARTICLES) {
         fprintf(stderr, "Too many particles for MAX_PARTICLES\n");
         exit(1);
     }
 
-    #ifdef BALL_CASE
+    #ifdef WING_CASE
+        double angleOfAttack = conf->angleOfAttack;
+    #elif defined(BALL_CASE)
         double angleOfAttack = 0.;
     #endif
-    sim->NFree = PFree / ( KB * TFree );
-    sim->UFree = MaFree * sqrt ( ( 5.0 / 3.0 ) * KB * TFree / moleculeMass );
+    sim->NFree = conf->PFree / ( conf->KB * conf->TFree );
+    sim->UFree = conf->MaFree * sqrt ( ( 5.0 / 3.0 ) * conf->KB * conf->TFree / conf->moleculeMass );
     sim->UxFree = sim->UFree * cos ( M_PI * angleOfAttack / 180.0 );
     sim->UyFree = - sim->UFree * sin ( M_PI * angleOfAttack / 180.0 );
     sim->UzFree = 0.0;
 
-    sim->weight = sim->NFree * sim->cellVolume / particlesPerCellTarget;
+    sim->weight = sim->NFree * sim->cellVolume / conf->particlesPerCellTarget;
 }
 
 void index_particles(Simulation *sim) {
@@ -74,6 +76,7 @@ void index_particles(Simulation *sim) {
 
 void generate_particles_in_rect(
     Simulation *sim,
+    Config *conf,
     double x1, double x2,
     double y1, double y2,
     double z1, double z2,
@@ -105,38 +108,38 @@ void generate_particles_in_rect(
         sim->P[i].y = y1 + (y2 - y1) * randu();
         sim->P[i].z = z1 + (z2 - z1) * randu();
 
-        sim->P[i].vx = randn(ux, sqrt(KB * Tgas / moleculeMass)); // TODO don't calc sqrt every time
-        sim->P[i].vy = randn(uy, sqrt(KB * Tgas / moleculeMass));
-        sim->P[i].vz = randn(uz, sqrt(KB * Tgas / moleculeMass));
+        sim->P[i].vx = randn(ux, sqrt(conf->KB * Tgas / conf->moleculeMass)); // TODO don't calc sqrt every time
+        sim->P[i].vy = randn(uy, sqrt(conf->KB * Tgas / conf->moleculeMass));
+        sim->P[i].vz = randn(uz, sqrt(conf->KB * Tgas / conf->moleculeMass));
 
         if (moveFlag) {
-            sim->P[i].x += dt * sim->P[i].vx;
-            sim->P[i].y += dt * sim->P[i].vy;
-            sim->P[i].z += dt * sim->P[i].vz;
+            sim->P[i].x += conf->dt * sim->P[i].vx;
+            sim->P[i].y += conf->dt * sim->P[i].vy;
+            sim->P[i].z += conf->dt * sim->P[i].vz;
         }
     }
 
     sim->NP += Nnew;
 }
 
-void initialize_particles(Simulation *sim) {
+void initialize_particles(Simulation *sim, Config *conf) {
     sim->NP = 0;
-    generate_particles_in_rect(sim, 0.0, Lx, 0.0, Ly, 0.0, Lz, TFree, 0);
+    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 0);
 }
 
 
-void apply_boundary_conditions_free_stream(Simulation *sim) {
-    generate_particles_in_rect(sim, -DL, 0.0, 0.0, Ly, 0.0, Lz, TFree, 1);
-    generate_particles_in_rect(sim, Lx, Lx + DL, 0.0, Ly, 0.0, Lz, TFree, 1);
-    generate_particles_in_rect(sim, 0.0, Lx, -DL, 0.0, 0.0, Lz, TFree, 1);
-    generate_particles_in_rect(sim, 0.0, Lx, Ly, Ly + DL, 0.0, Lz, TFree, 1);
-    generate_particles_in_rect(sim, 0.0, Lx, 0.0, Ly, -DL, 0.0, TFree, 1);
-    generate_particles_in_rect(sim, 0.0, Lx, 0.0, Ly, Lz, Lz + DL, TFree, 1);
+void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
+    generate_particles_in_rect(sim, conf, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
+    generate_particles_in_rect(sim, conf, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
+    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, conf->TFree, 1);
+    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, conf->TFree, 1);
+    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, conf->TFree, 1);
+    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, conf->TFree, 1);
 
     for (int i = 0; i < sim->NP; i++) {
-        if (sim->P[i].x < 0.0 || sim->P[i].x >= Lx 
-            || sim->P[i].y < 0.0 || sim->P[i].y >= Ly 
-            || sim->P[i].z < 0.0 || sim->P[i].z >= Lz
+        if (sim->P[i].x < 0.0 || sim->P[i].x >= conf->Lx 
+            || sim->P[i].y < 0.0 || sim->P[i].y >= conf->Ly 
+            || sim->P[i].z < 0.0 || sim->P[i].z >= conf->Lz
         ) {
             sim->P[i] = sim->P[sim->NP - 1];
             sim->NP--;
@@ -145,17 +148,24 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     }
 }
 
-void move_particles(Simulation *sim) {
+void move_particles(Simulation *sim, Config *conf) {
     for (int i = 0; i < sim->NP; i++) {
         double X0 = sim->P[i].x;
         double Y0 = sim->P[i].y;
         double Z0 = sim->P[i].z;
-        sim->P[i].x += dt * sim->P[i].vx;
-        sim->P[i].y += dt * sim->P[i].vy;
-        sim->P[i].z += dt * sim->P[i].vz;
+        sim->P[i].x += conf->dt * sim->P[i].vx;
+        sim->P[i].y += conf->dt * sim->P[i].vy;
+        sim->P[i].z += conf->dt * sim->P[i].vz;
 
 
         #ifdef WING_CASE
+        double dt = conf->dt;
+        double moleculeMass = conf->moleculeMass;
+        double Tw = conf->Tw;
+        double WingX = conf->WingX;
+        double WingY = conf->WingY;
+        double WingLength = conf->WingLength;
+
         if ( ( Y0 - WingY ) * ( sim->P[i].y - WingY ) < 0.0 ) {
             // Linear interpolation to point Y = WingY
             double Xw=( X0*(WingY-sim->P[i].y)+sim->P[i].x*(Y0-WingY))/(Y0-sim->P[i].y);
@@ -166,7 +176,11 @@ void move_particles(Simulation *sim) {
                 // Linear interpolation of the time of scattering, Eq. (6.5.4)
                 double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - sim->P[i].y );
                 // Generate velocity vector of the reflected molecule
-                diffuse_scattering_y(&(sim->P[i].vx), &(sim->P[i].vy), &(sim->P[i].vz), moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0));
+                diffuse_scattering_y(
+                    &(sim->P[i].vx), &(sim->P[i].vy), &(sim->P[i].vz), 
+                    moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
+                    conf->KB
+                );
                 // Move the reflected molecule
                 sim->P[i].x = Xw + Dt1 * sim->P[i].vx;
                 sim->P[i].y = WingY + Dt1 * sim->P[i].vy;
@@ -185,9 +199,10 @@ void move_particles(Simulation *sim) {
             double dz = z1 - z0;
 
             // Sphere center
-            double cx = ballCenterX;
-            double cy = ballCenterY;
-            double cz = ballCenterZ;
+            double cx = conf->ballCenterX;
+            double cy = conf->ballCenterY;
+            double cz = conf->ballCenterZ;
+            double ballRadius = conf->ballRadius;
 
             // Shifted initial position
             double rx = x0 - cx;
@@ -220,7 +235,7 @@ void move_particles(Simulation *sim) {
                     double Zw = z0 + t_hit * dz;
 
                     // Remaining time after collision
-                    double Dt1 = dt * (1.0 - t_hit);
+                    double Dt1 = conf->dt * (1.0 - t_hit);
 
                     // Surface normal (outward)
                     double nx = (Xw - cx) / ballRadius;
@@ -229,8 +244,8 @@ void move_particles(Simulation *sim) {
 
                     // Diffuse reflection aligned with normal
                     diffuse_scattering(&(sim->P[i].vx), &(sim->P[i].vy), &(sim->P[i].vz),
-                                    moleculeMass, Tb,
-                                    nx, ny, nz);
+                                    conf->moleculeMass, conf->Tb,
+                                    nx, ny, nz, conf->KB);
 
                     // Move after collision
                     sim->P[i].x = Xw + Dt1 * sim->P[i].vx;
