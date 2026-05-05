@@ -8,6 +8,8 @@ set(SOURCES
     src/math_utils.c 
     src/config.c 
     src/collider.c 
+    src/simulation.c
+    src/io_utils.c
 )
 
 # Executable for Wing case
