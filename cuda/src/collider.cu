@@ -90,6 +90,7 @@ int collide_particles(Simulation *sim, Config *conf) {
 
     int *d_total_collisions;
     CHECK(cudaMalloc(&d_total_collisions, sizeof(int)));
+    CHECK(cudaMemset(d_total_collisions, 0, sizeof(int)));
 
     Config *d_conf;
     CHECK(cudaMalloc(&d_conf, sizeof(Config)));
