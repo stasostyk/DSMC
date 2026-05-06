@@ -286,6 +286,9 @@ void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
     CHECK(cudaMalloc(&d_new_P, sim->NP * sizeof(Particle)));
     CHECK(cudaMemset(d_new_NP, 0, sizeof(int)));
 
+    CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
+
     filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
         d_C, sim->d_P, d_new_P, sim->NP, d_new_NP
     );
