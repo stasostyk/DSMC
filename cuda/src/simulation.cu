@@ -7,6 +7,7 @@
 #include "../include/simulation.h"
 #include "../include/config.h"
 #include "../include/math_utils.h"
+#include "../include/cuda_utils.h"
 
 __global__ void init_rng_kernel(curandState *states, unsigned long seed) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -17,8 +18,8 @@ __global__ void init_rng_kernel(curandState *states, unsigned long seed) {
 void setup(Simulation *sim, Config *conf) {
     sim->P = (Particle *)malloc(MAX_PARTICLES * sizeof(Particle));
 
-    cudaMalloc(&sim->d_P, MAX_PARTICLES * sizeof(Particle));
-    cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState));
+    CHECK(cudaMalloc(&sim->d_P, MAX_PARTICLES * sizeof(Particle)));
+    CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
 
     sim->samples = (Cell *)malloc(NX * NY * NZ * sizeof(Cell));
     sim->cellCount = (int *)malloc(NX * NY * NZ * sizeof(int));
@@ -64,6 +65,7 @@ void setup(Simulation *sim, Config *conf) {
 
     // TODO put proper seed, as before with CPU
     init_rng_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->rngStates, 1234);
+    CHECK_KERNELCALL();
 }
 
 void index_particles(Simulation *sim) {
@@ -173,19 +175,20 @@ void generate_particles_in_rect(
     dim3 blocksPerGrid((Nnew + threads - 1) / threads, 1, 1);
 
     Config *d_C;
-    cudaMalloc(&d_C, sizeof(Config));
+    CHECK(cudaMalloc(&d_C, sizeof(Config)));
 
-    cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice);
+    CHECK(cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
     generate_particles_in_rect_kernel<<<blocksPerGrid, threadsPerBlock>>>(
         sim->d_P, d_C, sim->NP, Nnew, 
         x1, x2, y1, y2, z1, z2, ux, uy, uz, 
         conf->dt, Tgas, moveFlag, sim->rngStates
     );
+    CHECK_KERNELCALL();
 
-    cudaFree(d_C);
-    cudaMemcpy(sim->P, sim->d_P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyDeviceToHost);
+    CHECK(cudaMemcpy(sim->P, sim->d_P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyDeviceToHost));
+    CHECK(cudaFree(d_C));
 
     sim->NP += Nnew;
 }
@@ -361,6 +364,6 @@ void clearPointers(Simulation *sim) {
     free(sim->cellCount);
     free(sim->cellList);
 
-    cudaFree(sim->d_P);
-    cudaFree(sim->rngStates);
+    CHECK(cudaFree(sim->d_P));
+    CHECK(cudaFree(sim->rngStates));
 }
