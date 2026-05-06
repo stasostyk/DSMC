@@ -1,8 +1,10 @@
+#!/usr/bin/python3
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+import sys
 
-filename = "cmake-build-debug/fields_avg.dat"
 
 # columns for file format: x y z? n ux uy uz T avg_count
 z_present = True
@@ -105,7 +107,16 @@ def plot_field(ax, x, y, S, U, V, title, cbar_label):
     ax.tick_params(direction="in", which="both")
 
 def main():
-    x, y, N, T, U, V = load_structured_field(filename, density_col, temp_col, ux_col, uy_col)
+    if len(sys.argv) < 2:
+        print(f'Usage: {sys.argv[0]} [input .dat file] [output .png file (optional)]')
+        exit(0)
+
+    input_filename = sys.argv[1]
+    output_filename = "advanced_plot.png"
+    if len(sys.argv) >= 3:
+        output_filename = sys.argv[2]
+    
+    x, y, N, T, U, V = load_structured_field(input_filename, density_col, temp_col, ux_col, uy_col)
 
     # velocity magnitude
     Vmag = np.sqrt(U**2 + V**2)
@@ -126,7 +137,7 @@ def main():
     axes[0].set_ylabel("Y")
 
     plt.tight_layout()
-    plt.savefig("advanced_plot.png", dpi=300)
+    plt.savefig(output_filename, dpi=300)
 
 
 if __name__ == "__main__":

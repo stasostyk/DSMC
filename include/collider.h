@@ -1,6 +1,7 @@
 #ifndef DSMC_COLLIDER_H
 #define DSMC_COLLIDER_H
 
+#include "config.h"
 #include "particle.h"
 
 int collide_particles(Particle *P,
