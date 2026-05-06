@@ -6,7 +6,7 @@
 #include "../include/simulation.h"
 #include "../include/io_utils.h"
 #include "../include/timer.h"
-
+#include "../include/cuda_tst.h"
 
 int main(void) {
 
@@ -23,7 +23,7 @@ int main(void) {
 
     printf("VectorAdd result (first 5): ");
     for (int i = 0; i < 5; ++i) {
-        printf("%d ", c[i]);
+        printf("%f ", c[i]);
     }
     printf("\n");
 
