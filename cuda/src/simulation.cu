@@ -79,7 +79,36 @@ __global__ void reset_cell_count_kernel(int *cellCount) {
     cellCount[IDX_CELL(k, l, m)] = 0;
 }
 
+// TODO dx, dy, dz could be constant memory (or in #define)
+__global__ void bin_particles_kernel(
+    Particle *P, int *cellCount, int *cellList, int NP,
+    int dx, int dy, int dz
+) {
+    // TODO this seems like a bin pattern, could be improved
+    // note: the bottleneck is the atomicAdd
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+
+    int k = (int)(P[i].x / dx);
+    int l = (int)(P[i].y / dy);
+    int m = (int)(P[i].z / dz);
+
+    if (k < 0) k = 0;
+    if (k >= NX) k = NX - 1;
+    if (l < 0) l = 0;
+    if (l >= NY) l = NY - 1;
+    if (m < 0) m = 0;
+    if (m >= NZ) m = NZ - 1;
+
+    int n = atomicAdd(&cellCount[IDX_CELL(k, l, m)], 1);
+    cellList[IDX_LIST(k, l, m, n)] = i;
+}
+
 void index_particles(Simulation *sim) {
+    CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
 
     dim3 threadsPerBlock(8, 8, 8);
     dim3 blocksPerGrid(
@@ -88,31 +117,23 @@ void index_particles(Simulation *sim) {
         (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
     );
 
-    CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
-
     // TODO use cuda_memset instead
     reset_cell_count_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_cellCount);
     CHECK_KERNELCALL();
 
+    CHECK(cudaDeviceSynchronize());
+
+    dim3 threadsPerBlock2(128, 1, 1);
+    dim3 blocksPerGrid2((sim->NP + threadsPerBlock.x - 1) / threadsPerBlock.x, 1, 1);
+    bin_particles_kernel<<<blocksPerGrid2, threadsPerBlock2>>>(
+        sim->d_P, sim->d_cellCount, sim->d_cellList, sim->NP,
+        sim->dx, sim->dy, sim->dz
+    );
+    CHECK_KERNELCALL();
+
     CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
-    // or cuda synchronize
-
-    for (int i = 0; i < sim->NP; i++) {
-        int k = (int)(sim->P[i].x / sim->dx);
-        int l = (int)(sim->P[i].y / sim->dy);
-        int m = (int)(sim->P[i].z / sim->dz);
-
-        if (k < 0) k = 0;
-        if (k >= NX) k = NX - 1;
-        if (l < 0) l = 0;
-        if (l >= NY) l = NY - 1;
-        if (m < 0) m = 0;
-        if (m >= NZ) m = NZ - 1;
-
-        int n = sim->cellCount[IDX_CELL(k, l, m)];
-        sim->cellList[IDX_LIST(k, l, m, n)] = i;
-        sim->cellCount[IDX_CELL(k, l, m)]++;
-    }
+    CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->P, sim->d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
 }
 
 __global__ void generate_particles_in_rect_kernel(
