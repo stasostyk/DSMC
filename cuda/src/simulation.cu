@@ -24,7 +24,7 @@ void setup(Simulation *sim, Config *conf) {
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
     CHECK(cudaMalloc(&sim->d_P, PARTICLES_SZ));
     CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));
-    CHECK(cudaMalloc(&sim->cellList, CELL_LIST_SZ));
+    CHECK(cudaMalloc(&sim->d_cellList, CELL_LIST_SZ));
 
     sim->sampleSteps = 0;
     sim->NP = 0;
