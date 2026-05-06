@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #define CHECK(call)                                                                 \
   {                                                                                 \
     const cudaError_t err = call;                                                   \
