@@ -27,17 +27,31 @@ extern const int particlesPerCellTarget;
 extern const int firstSampleStep;
 extern const int samplingPeriod;
 
-// wing
-extern const double WingX;
-extern const double WingY;
-extern const double WingLength;
-extern const double Tw;
+#ifdef WING_CASE
+    // wing
+    extern const double WingX;
+    extern const double WingY;
+    extern const double WingLength;
+    extern const double Tw;
 
-// stream
-extern const double MaFree;
-extern const double PFree;
-extern const double TFree;
-extern const double angleOfAttack;
+    // stream
+    extern const double MaFree;
+    extern const double PFree;
+    extern const double TFree;
+    extern const double angleOfAttack;
+#elif defined(BALL_CASE)
+    // ball 
+    extern const double ballCenterX;
+    extern const double ballCenterY;
+    extern const double ballCenterZ;
+    extern const double ballRadius;
+    extern const double Tb;
+
+    // stream
+    extern const double MaFree;
+    extern const double PFree;
+    extern const double TFree;
+#endif
 
 // VHS model
 extern const double omega;

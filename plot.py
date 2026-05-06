@@ -2,7 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, Circle
 import sys
 
 
@@ -21,6 +21,10 @@ wing_x1 = 0.3
 wing_x2 = 0.5
 wing_y = 0.5
 wing_thickness = 0.02
+
+ball_cx = 0.6
+ball_cy = 0.6
+ball_radius = 0.15
 
 levels = 20
 stream_density = 1.0
@@ -78,7 +82,7 @@ def load_structured_field(filename, density_col, temp_col, ux_col, uy_col):
 
     return x_unique, y_unique, N, Tg, U, V
 
-def plot_field(ax, x, y, S, U, V, title, cbar_label):
+def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label):
     cf = ax.contourf(x, y, S, levels=levels, cmap=cmap)
     cbar = plt.colorbar(cf, ax=ax)
     cbar.set_label(cbar_label)
@@ -92,14 +96,21 @@ def plot_field(ax, x, y, S, U, V, title, cbar_label):
         arrowstyle="->"
     )
 
-    wing = Rectangle(
-        (wing_x1, wing_y - wing_thickness / 2.0),
-        wing_x2 - wing_x1,
-        wing_thickness,
-        facecolor="white",
-        edgecolor="white"
-    )
-    ax.add_patch(wing)
+    if boundary_case == 'wing':
+        wing = Rectangle(
+            (wing_x1, wing_y - wing_thickness / 2.0),
+            wing_x2 - wing_x1,
+            wing_thickness,
+            facecolor="white",
+            edgecolor="white"
+        )
+        ax.add_patch(wing)
+    else:
+        ball = Circle((ball_cx, ball_cy), ball_radius,
+                      facecolor="white",
+                      edgecolor="white"
+                      )
+        ax.add_patch(ball)
 
     ax.set_title(title)
     ax.set_aspect("equal")
@@ -107,14 +118,19 @@ def plot_field(ax, x, y, S, U, V, title, cbar_label):
     ax.tick_params(direction="in", which="both")
 
 def main():
-    if len(sys.argv) < 2:
-        print(f'Usage: {sys.argv[0]} [input .dat file] [output .png file (optional)]')
+    if len(sys.argv) < 3:
+        print(f'Usage: {sys.argv[0]} [select case: ball/wing] [input .dat file] [output .png file (optional)]')
         exit(0)
 
-    input_filename = sys.argv[1]
+    boundary_case = sys.argv[1]
+    if boundary_case != 'ball' and boundary_case != 'wing':
+        print(f'Boundary case must be either "ball" or "wing", but was {boundary_case}')
+        exit(0)
+
+    input_filename = sys.argv[2]
     output_filename = "advanced_plot.png"
-    if len(sys.argv) >= 3:
-        output_filename = sys.argv[2]
+    if len(sys.argv) >= 4:
+        output_filename = sys.argv[3]
     
     x, y, N, T, U, V = load_structured_field(input_filename, density_col, temp_col, ux_col, uy_col)
 
@@ -128,9 +144,9 @@ def main():
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5), dpi=150)
 
-    plot_field(axes[0], x, y, P, U, V, "Pressure", "p")
-    plot_field(axes[1], x, y, T, U, V, "Temperature", "T")
-    plot_field(axes[2], x, y, Vmag, U, V, "Velocity Magnitude", "|u|")
+    plot_field(boundary_case, axes[0], x, y, P, U, V, "Pressure", "p")
+    plot_field(boundary_case, axes[1], x, y, T, U, V, "Temperature", "T")
+    plot_field(boundary_case, axes[2], x, y, Vmag, U, V, "Velocity Magnitude", "|u|")
 
     for ax in axes:
         ax.set_xlabel("X")

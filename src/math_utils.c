@@ -54,3 +54,52 @@ void diffuse_scattering_y(double *vx, double *vy, double *vz, double m, double T
     *vz = randn(0.0, RT);
     *vy = Ny * rayleigh(RT);
 }
+
+void diffuse_scattering(
+    double *vx, double *vy, double *vz, 
+    double m, double T, 
+    double nx, double ny, double nz
+) {
+    double RT = sqrt(KB * T / m);
+
+    // normalize the norm
+    double norm = sqrt(nx*nx + ny*ny + nz*nz);
+    nx /= norm;
+    ny /= norm;
+    nz /= norm;
+
+    // orthonormal basis
+    double tx1, ty1, tz1;
+
+    // pick a vector not parallel to n
+    if (fabs(nx) < 0.9) {
+        tx1 = 0.0;
+        ty1 = -nz;
+        tz1 = ny;
+    } else {
+        tx1 = -ny;
+        ty1 = nx;
+        tz1 = 0.0;
+    }
+
+     // normalize t1
+    double t1norm = sqrt(tx1*tx1 + ty1*ty1 + tz1*tz1);
+    tx1 /= t1norm;
+    ty1 /= t1norm;
+    tz1 /= t1norm;
+
+    // t2 = n × t1
+    double tx2 = ny*tz1 - nz*ty1;
+    double ty2 = nz*tx1 - nx*tz1;
+    double tz2 = nx*ty1 - ny*tx1;
+
+    // sample velocities in local frame
+    double v_t1 = randn(0.0, RT);
+    double v_t2 = randn(0.0, RT);
+    double v_n  = rayleigh(RT);   // always outward
+
+    // transform back to global coordinates 
+    *vx = v_t1 * tx1 + v_t2 * tx2 + v_n * nx;
+    *vy = v_t1 * ty1 + v_t2 * ty2 + v_n * ny;
+    *vz = v_t1 * tz1 + v_t2 * tz2 + v_n * nz;
+}
