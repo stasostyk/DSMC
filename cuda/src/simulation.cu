@@ -82,7 +82,7 @@ __global__ void reset_cell_count_kernel(int *cellCount) {
 // TODO dx, dy, dz could be constant memory (or in #define)
 __global__ void bin_particles_kernel(
     Particle *P, int *cellCount, int *cellList, int NP,
-    int dx, int dy, int dz
+    double dx, double dy, double dz
 ) {
     // TODO this seems like a bin pattern, could be improved
     // note: the bottleneck is the atomicAdd
