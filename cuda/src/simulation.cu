@@ -358,7 +358,9 @@ void move_particles(Simulation *sim, Config *conf) {
     CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
     move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, d_C, sim->NP, sim->rngStates);
+    CHECK_KERNELCALL();
 
+    CHECK(cudaMemcpy(sim->P, sim->d_P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyDeviceToHost));
     CHECK(cudaFree(d_C));
 }
 
