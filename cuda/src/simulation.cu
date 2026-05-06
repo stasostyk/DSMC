@@ -225,7 +225,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
     }
 }
 
-__global__ void move_particles_kernel(Particle *P, Config *conf, int NP) {
+__global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandState *rngStates) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
@@ -257,10 +257,11 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP) {
             // Linear interpolation of the time of scattering, Eq. (6.5.4)
             double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P[i].y );
             // Generate velocity vector of the reflected molecule
-            diffuse_scattering_y(
+            diffuse_scattering_y_device(
                 &(P[i].vx), &(P[i].vy), &(P[i].vz), 
                 moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
-                conf->KB
+                conf->KB,
+                &rngStates[i]
             );
             // Move the reflected molecule
             P[i].x = Xw + Dt1 * P[i].vx;
@@ -324,9 +325,11 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP) {
                 double nz = (Zw - cz) / ballRadius;
 
                 // Diffuse reflection aligned with normal
-                diffuse_scattering(&(P[i].vx), &(P[i].vy), &(P[i].vz),
+                diffuse_scattering_device(&(P[i].vx), &(P[i].vy), &(P[i].vz),
                                 conf->moleculeMass, conf->Tb,
-                                nx, ny, nz, conf->KB);
+                                nx, ny, nz, conf->KB,
+                                &rngStates[i]
+                            );
 
                 // Move after collision
                 P[i].x = Xw + Dt1 * P[i].vx;
@@ -354,7 +357,7 @@ void move_particles(Simulation *sim, Config *conf) {
     CHECK(cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice));
     CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
-    move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, d_C, sim->NP);
+    move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, d_C, sim->NP, sim->rngStates);
 
     CHECK(cudaFree(d_C));
 }
