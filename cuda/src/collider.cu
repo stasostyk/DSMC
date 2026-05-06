@@ -103,7 +103,7 @@ int collide_particles(
 
     no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
         d_total_collisions, sim->d_P, sim->d_cellCount, sim->d_cellList,
-        weight, cellVolume, sim->rngStates
+        weight, cellVolume, d_conf, sim->rngStates
     );
     CHECK_KERNELCALL();
 
