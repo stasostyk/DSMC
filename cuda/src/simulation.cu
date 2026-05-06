@@ -16,14 +16,15 @@ __global__ void init_rng_kernel(curandState *states, unsigned long seed) {
 }
 
 void setup(Simulation *sim, Config *conf) {
-    sim->P = (Particle *)malloc(MAX_PARTICLES * sizeof(Particle));
+    sim->P = (Particle *)malloc(PARTICLES_SZ);
+    sim->samples = (Cell *)malloc(SAMPLES_SZ);
+    sim->cellCount = (int *)malloc(CELL_COUNT_SZ);
+    sim->cellList = (int *)malloc(CELL_LIST_SZ);
 
-    CHECK(cudaMalloc(&sim->d_P, MAX_PARTICLES * sizeof(Particle)));
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
-
-    sim->samples = (Cell *)malloc(NX * NY * NZ * sizeof(Cell));
-    sim->cellCount = (int *)malloc(NX * NY * NZ * sizeof(int));
-    sim->cellList = (int *)malloc(NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int));
+    CHECK(cudaMalloc(&sim->d_P, PARTICLES_SZ));
+    CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));
+    CHECK(cudaMalloc(&sim->cellList, CELL_LIST_SZ));
 
     sim->sampleSteps = 0;
     sim->NP = 0;
@@ -68,14 +69,33 @@ void setup(Simulation *sim, Config *conf) {
     CHECK_KERNELCALL();
 }
 
+__global__ void reset_cell_count_kernel(int *cellCount) {
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    int l = blockIdx.y * blockDim.y + threadIdx.y;
+    int m = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (k >= NX || l >= NY || m >= NZ) return;
+
+    cellCount[IDX_CELL(k, l, m)] = 0;
+}
+
 void index_particles(Simulation *sim) {
-    for (int k = 0; k < NX; k++) {
-        for (int l = 0; l < NY; l++) {
-            for (int m = 0; m < NZ; m++) {
-                sim->cellCount[IDX_CELL(k, l, m)] = 0;
-            }
-        }
-    }
+
+    dim3 threadsPerBlock(8, 8, 8);
+    dim3 blocksPerGrid(
+        (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
+        (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
+        (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
+    );
+
+    CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
+
+    // TODO use cuda_memset instead
+    reset_cell_count_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_cellCount);
+    CHECK_KERNELCALL();
+
+    CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
+    // or cuda synchronize
 
     for (int i = 0; i < sim->NP; i++) {
         int k = (int)(sim->P[i].x / sim->dx);
@@ -398,6 +418,8 @@ void clearPointers(Simulation *sim) {
     free(sim->cellCount);
     free(sim->cellList);
 
-    CHECK(cudaFree(sim->d_P));
     CHECK(cudaFree(sim->rngStates));
+    CHECK(cudaFree(sim->d_P));
+    CHECK(cudaFree(sim->d_cellCount));
+    CHECK(cudaFree(sim->d_cellList));
 }

@@ -12,13 +12,18 @@
 
 typedef struct {
     curandState *rngStates; // for using randomness in GPU
+                            // allocated in device memory (GPU)
 
-    Particle *P;   // used by host (CPU)
-    Particle *d_P; // used by device (GPU)
+    Particle *P;   // allocated in host memory (CPU)
+    Particle *d_P; // allocated in device memory (GPU)
 
     Cell *samples;
-    int *cellCount;
-    int *cellList;
+
+    int *cellCount;   // allocated in host memory (CPU)
+    int *d_cellCount; // allocated in device memory (GPU)
+
+    int *cellList;   // allocated in host memory (CPU)
+    int *d_cellList; // allocated in device memory (GPU)
 
     // counters
     int sampleSteps;
