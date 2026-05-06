@@ -17,7 +17,8 @@ typedef struct {
     Particle *P;   // allocated in host memory (CPU)
     Particle *d_P; // allocated in device memory (GPU)
 
-    Cell *samples;
+    Cell *samples;   // allocated in host memory (CPU)
+    Cell *d_samples; // allocated in device memory (GPU)
 
     int *cellCount;   // allocated in host memory (CPU)
     int *d_cellCount; // allocated in device memory (GPU)

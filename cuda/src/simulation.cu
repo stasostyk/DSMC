@@ -23,6 +23,7 @@ void setup(Simulation *sim, Config *conf) {
 
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
     CHECK(cudaMalloc(&sim->d_P, PARTICLES_SZ));
+    CHECK(cudaMalloc(&sim->d_samples, SAMPLES_SZ));
     CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));
     CHECK(cudaMalloc(&sim->d_cellList, CELL_LIST_SZ));
 
@@ -406,32 +407,58 @@ void move_particles(Simulation *sim, Config *conf) {
     CHECK(cudaFree(d_C));
 }
 
+__global__ void accumulate_sampling_kernel(
+    int *cellCount, int *cellList, Cell *samples, Particle *P
+) {
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    int l = blockIdx.y * blockDim.y + threadIdx.y;
+    int m = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (k >= NX || l >= NY || m >= NZ) return;
+
+    int Nc = cellCount[IDX_CELL(k, l, m)];
+
+    samples[IDX_CELL(k, l, m)].countNP += Nc;
+
+    for (int q = 0; q < Nc; q++) {
+        int i = cellList[IDX_LIST(k, l, m, q)];
+
+        double vx = P[i].vx;
+        double vy = P[i].vy;
+        double vz = P[i].vz;
+
+        samples[IDX_CELL(k, l, m)].countVx += vx;
+        samples[IDX_CELL(k, l, m)].countVy += vy;
+        samples[IDX_CELL(k, l, m)].countVz += vz;
+        samples[IDX_CELL(k, l, m)].countV2 += vx * vx + vy * vy + vz * vz;
+    }
+}
+
 
 void accumulate_sampling(Simulation *sim) {
     sim->sampleSteps++;
 
-    for (int k = 0; k < NX; k++) {
-        for (int l = 0; l < NY; l++) {
-            for (int m = 0; m < NZ; m++) {
-                int Nc = sim->cellCount[IDX_CELL(k, l, m)];
+    CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(sim->d_samples, sim->samples, SAMPLES_SZ, cudaMemcpyHostToDevice));
 
-                sim->samples[IDX_CELL(k, l, m)].countNP += Nc;
+    dim3 threadsPerBlock(8, 8, 8);
+    dim3 blocksPerGrid(
+        (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
+        (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
+        (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
+    );
 
-                for (int q = 0; q < Nc; q++) {
-                    int i = sim->cellList[IDX_LIST(k, l, m, q)];
+    accumulate_sampling_kernel<<<blocksPerGrid, threadsPerBlock>>>(
+        sim->d_cellCount, sim->d_cellList, sim->d_samples, sim->d_P
+    );
+    CHECK_KERNELCALL();
 
-                    double vx = sim->P[i].vx;
-                    double vy = sim->P[i].vy;
-                    double vz = sim->P[i].vz;
-
-                    sim->samples[IDX_CELL(k, l, m)].countVx += vx;
-                    sim->samples[IDX_CELL(k, l, m)].countVy += vy;
-                    sim->samples[IDX_CELL(k, l, m)].countVz += vz;
-                    sim->samples[IDX_CELL(k, l, m)].countV2 += vx * vx + vy * vy + vz * vz;
-                }
-            }
-        }
-    }
+    CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->P, sim->d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
 }
 
 void clearPointers(Simulation *sim) {
@@ -442,6 +469,7 @@ void clearPointers(Simulation *sim) {
 
     CHECK(cudaFree(sim->rngStates));
     CHECK(cudaFree(sim->d_P));
+    CHECK(cudaFree(sim->d_samples));
     CHECK(cudaFree(sim->d_cellCount));
     CHECK(cudaFree(sim->d_cellList));
 }
