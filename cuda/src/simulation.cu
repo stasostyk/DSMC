@@ -177,6 +177,8 @@ void generate_particles_in_rect(
     Config *d_C;
     CHECK(cudaMalloc(&d_C, sizeof(Config)));
 
+    // TODO: probably can be optimized that in simulation loop not always the cuda memcpy is needed
+    // (takes a lot of time)
     CHECK(cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice));
     CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
@@ -207,6 +209,10 @@ void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
     generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, conf->TFree, 1);
     generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, conf->TFree, 1);
 
+    // TODO this can also be done with CUDA, but trickier, idea:
+    // 1st kernel: mark the particles true/false if they need to be removed
+    // 2nd kernel: scan/prefix sum 
+    // 3rd kernel: (scatter) collect valid particles
     for (int i = 0; i < sim->NP; i++) {
         if (sim->P[i].x < 0.0 || sim->P[i].x >= conf->Lx 
             || sim->P[i].y < 0.0 || sim->P[i].y >= conf->Ly 
@@ -219,115 +225,138 @@ void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
     }
 }
 
-void move_particles(Simulation *sim, Config *conf) {
-    for (int i = 0; i < sim->NP; i++) {
-        double X0 = sim->P[i].x;
-        double Y0 = sim->P[i].y;
-        double Z0 = sim->P[i].z;
-        sim->P[i].x += conf->dt * sim->P[i].vx;
-        sim->P[i].y += conf->dt * sim->P[i].vy;
-        sim->P[i].z += conf->dt * sim->P[i].vz;
+__global__ void move_particles_kernel(Particle *P, Config *conf, int NP) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+
+    // TODO a lot of calls to global memory P[i], probably would be better to save to local
+
+    double X0 = P[i].x;
+    double Y0 = P[i].y;
+    double Z0 = P[i].z;
+    P[i].x += conf->dt * P[i].vx;
+    P[i].y += conf->dt * P[i].vy;
+    P[i].z += conf->dt * P[i].vz;
 
 
-        #ifdef WING_CASE
-        double dt = conf->dt;
-        double moleculeMass = conf->moleculeMass;
-        double Tw = conf->Tw;
-        double WingX = conf->WingX;
-        double WingY = conf->WingY;
-        double WingLength = conf->WingLength;
+    #ifdef WING_CASE
+    double dt = conf->dt;
+    double moleculeMass = conf->moleculeMass;
+    double Tw = conf->Tw;
+    double WingX = conf->WingX;
+    double WingY = conf->WingY;
+    double WingLength = conf->WingLength;
 
-        if ( ( Y0 - WingY ) * ( sim->P[i].y - WingY ) < 0.0 ) {
-            // Linear interpolation to point Y = WingY
-            double Xw=( X0*(WingY-sim->P[i].y)+sim->P[i].x*(Y0-WingY))/(Y0-sim->P[i].y);
-            double Zw=( Z0*(WingY-sim->P[i].y)+sim->P[i].z*(Y0-WingY))/(Y0-sim->P[i].y);
-            if ( Zw < 0.3 || Zw > 0.7 ) continue; // wing only occupies 0.3 < z < 0.7
-            if ( Xw > WingX && Xw < WingX + WingLength ) {
-                // Molecule interacts with the wing during the time step
-                // Linear interpolation of the time of scattering, Eq. (6.5.4)
-                double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - sim->P[i].y );
-                // Generate velocity vector of the reflected molecule
-                diffuse_scattering_y(
-                    &(sim->P[i].vx), &(sim->P[i].vy), &(sim->P[i].vz), 
-                    moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
-                    conf->KB
-                );
-                // Move the reflected molecule
-                sim->P[i].x = Xw + Dt1 * sim->P[i].vx;
-                sim->P[i].y = WingY + Dt1 * sim->P[i].vy;
-            }
+    if ( ( Y0 - WingY ) * ( sim->P[i].y - WingY ) < 0.0 ) {
+        // Linear interpolation to point Y = WingY
+        double Xw=( X0*(WingY-sim->P[i].y)+P[i].x*(Y0-WingY))/(Y0-P[i].y);
+        double Zw=( Z0*(WingY-sim->P[i].y)+P[i].z*(Y0-WingY))/(Y0-P[i].y);
+        if ( Zw < 0.3 || Zw > 0.7 ) continue; // wing only occupies 0.3 < z < 0.7
+        if ( Xw > WingX && Xw < WingX + WingLength ) {
+            // Molecule interacts with the wing during the time step
+            // Linear interpolation of the time of scattering, Eq. (6.5.4)
+            double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P[i].y );
+            // Generate velocity vector of the reflected molecule
+            diffuse_scattering_y(
+                &(P[i].vx), &(P[i].vy), &(P[i].vz), 
+                moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
+                conf->KB
+            );
+            // Move the reflected molecule
+            P[i].x = Xw + Dt1 * P[i].vx;
+            P[i].y = WingY + Dt1 * P[i].vy;
         }
-        #elif defined(BALL_CASE)
-        // Ray-sphere intersection test
-        {
-            // Initial and final positions
-            double x0 = X0, y0 = Y0, z0 = Z0;
-            double x1 = sim->P[i].x, y1 = sim->P[i].y, z1 = sim->P[i].z;
-
-            // Direction of motion
-            double dx = x1 - x0;
-            double dy = y1 - y0;
-            double dz = z1 - z0;
-
-            // Sphere center
-            double cx = conf->ballCenterX;
-            double cy = conf->ballCenterY;
-            double cz = conf->ballCenterZ;
-            double ballRadius = conf->ballRadius;
-
-            // Shifted initial position
-            double rx = x0 - cx;
-            double ry = y0 - cy;
-            double rz = z0 - cz;
-
-            // Quadratic coefficients: |r + t d|^2 = R^2
-            double a = dx*dx + dy*dy + dz*dz;
-            double b = 2.0 * (rx*dx + ry*dy + rz*dz);
-            double c = rx*rx + ry*ry + rz*rz - ballRadius*ballRadius;
-
-            double disc = b*b - 4.0*a*c;
-
-            if (disc >= 0.0) {
-                double sqrt_disc = sqrt(disc);
-
-                // time solutions
-                double t1 = (-b - sqrt_disc) / (2.0*a);
-                double t2 = (-b + sqrt_disc) / (2.0*a);
-
-                // pick earliest valid intersection in [0,1]
-                double t_hit = -1.0;
-                if (t1 >= 0.0 && t1 <= 1.0) t_hit = t1;
-                else if (t2 >= 0.0 && t2 <= 1.0) t_hit = t2;
-
-                if (t_hit >= 0.0) {
-                    // Intersection point
-                    double Xw = x0 + t_hit * dx;
-                    double Yw = y0 + t_hit * dy;
-                    double Zw = z0 + t_hit * dz;
-
-                    // Remaining time after collision
-                    double Dt1 = conf->dt * (1.0 - t_hit);
-
-                    // Surface normal (outward)
-                    double nx = (Xw - cx) / ballRadius;
-                    double ny = (Yw - cy) / ballRadius;
-                    double nz = (Zw - cz) / ballRadius;
-
-                    // Diffuse reflection aligned with normal
-                    diffuse_scattering(&(sim->P[i].vx), &(sim->P[i].vy), &(sim->P[i].vz),
-                                    conf->moleculeMass, conf->Tb,
-                                    nx, ny, nz, conf->KB);
-
-                    // Move after collision
-                    sim->P[i].x = Xw + Dt1 * sim->P[i].vx;
-                    sim->P[i].y = Yw + Dt1 * sim->P[i].vy;
-                    sim->P[i].z = Zw + Dt1 * sim->P[i].vz;
-                }
-            }
-        }
-
-        #endif
     }
+    #elif defined(BALL_CASE)
+    // Ray-sphere intersection test
+    {
+        // Initial and final positions
+        double x0 = X0, y0 = Y0, z0 = Z0;
+        double x1 = P[i].x, y1 = P[i].y, z1 = P[i].z;
+
+        // Direction of motion
+        double dx = x1 - x0;
+        double dy = y1 - y0;
+        double dz = z1 - z0;
+
+        // Sphere center
+        double cx = conf->ballCenterX;
+        double cy = conf->ballCenterY;
+        double cz = conf->ballCenterZ;
+        double ballRadius = conf->ballRadius;
+
+        // Shifted initial position
+        double rx = x0 - cx;
+        double ry = y0 - cy;
+        double rz = z0 - cz;
+
+        // Quadratic coefficients: |r + t d|^2 = R^2
+        double a = dx*dx + dy*dy + dz*dz;
+        double b = 2.0 * (rx*dx + ry*dy + rz*dz);
+        double c = rx*rx + ry*ry + rz*rz - ballRadius*ballRadius;
+
+        double disc = b*b - 4.0*a*c;
+
+        if (disc >= 0.0) {
+            double sqrt_disc = sqrt(disc);
+
+            // time solutions
+            double t1 = (-b - sqrt_disc) / (2.0*a);
+            double t2 = (-b + sqrt_disc) / (2.0*a);
+
+            // pick earliest valid intersection in [0,1]
+            double t_hit = -1.0;
+            if (t1 >= 0.0 && t1 <= 1.0) t_hit = t1;
+            else if (t2 >= 0.0 && t2 <= 1.0) t_hit = t2;
+
+            if (t_hit >= 0.0) {
+                // Intersection point
+                double Xw = x0 + t_hit * dx;
+                double Yw = y0 + t_hit * dy;
+                double Zw = z0 + t_hit * dz;
+
+                // Remaining time after collision
+                double Dt1 = conf->dt * (1.0 - t_hit);
+
+                // Surface normal (outward)
+                double nx = (Xw - cx) / ballRadius;
+                double ny = (Yw - cy) / ballRadius;
+                double nz = (Zw - cz) / ballRadius;
+
+                // Diffuse reflection aligned with normal
+                diffuse_scattering(&(P[i].vx), &(P[i].vy), &(P[i].vz),
+                                conf->moleculeMass, conf->Tb,
+                                nx, ny, nz, conf->KB);
+
+                // Move after collision
+                P[i].x = Xw + Dt1 * P[i].vx;
+                P[i].y = Yw + Dt1 * P[i].vy;
+                P[i].z = Zw + Dt1 * P[i].vz;
+            }
+        }
+    }
+
+    #endif
+
+}
+
+void move_particles(Simulation *sim, Config *conf) {
+    int threads = 256;
+    dim3 threadsPerBlock(threads, 1, 1);
+    dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
+
+    // TODO reuse this so that it wouldn't be needed to malloc and free and copy everytime
+    Config *d_C;
+    CHECK(cudaMalloc(&d_C, sizeof(Config)));
+
+    // TODO: probably can be optimized that in simulation loop not always the cuda memcpy is needed
+    // (takes a lot of time)
+    CHECK(cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
+
+    move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, d_C, sim->NP);
+
+    CHECK(cudaFree(d_C));
 }
 
 

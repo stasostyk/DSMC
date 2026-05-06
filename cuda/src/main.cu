@@ -9,26 +9,6 @@
 #include "../include/cuda_tst.h"
 
 int main(void) {
-
-    // const int N = 1024;
-
-    // float a[N], b[N], c[N];
-
-    // for (int i = 0; i < N; ++i) {
-    //     a[i] = i;
-    //     b[i] = 2 * i;
-    // }
-
-    // vectorAdd(a, b, c, N);
-
-    // printf("VectorAdd result (first 5): ");
-    // for (int i = 0; i < 5; ++i) {
-    //     printf("%f ", c[i]);
-    // }
-    // printf("\n");
-
-    // return 0; /////// TODO
-
     Timer t, allProgramTimer;
 
     timer_start(&allProgramTimer);
