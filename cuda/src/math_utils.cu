@@ -43,6 +43,17 @@ void random_isotropic_vector (double *R)
     R[2] = sinT * sin(E);
 }
 
+__device__
+void random_isotropic_vector_device (double *R, curandState *rngState)
+{
+    double cosT = 1.0 - 2.0 * curand_uniform(rngState);
+    double sinT = sqrt (1.0 - cosT * cosT);
+    double E = 2.0 * M_PI * curand_uniform(rngState);
+    R[0] = cosT;
+    R[1] = sinT * cos(E);
+    R[2] = sinT * sin(E);
+}
+
 double rayleigh(double sigma) {
     double u = randu();
     return sigma * sqrt(-2.0 * log(u));
