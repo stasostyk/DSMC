@@ -80,9 +80,10 @@ __global__ void no_time_counter_scheme_kernel(
 int collide_particles(
     Simulation *sim,
     Config *conf,
-    double weight, 
-    double cellVolume
 ) {
+    double weight = sim->weight;
+    double cellVolume = sim->cellVolume;
+    
     dim3 threadsPerBlock(8, 8, 8);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,

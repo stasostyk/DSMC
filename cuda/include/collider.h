@@ -4,11 +4,9 @@
 #include "config.h"
 #include "particle.h"
 
-int collide_particles(Config *conf, 
-                      Particle *P,
-                      int *cellCount,
-                      int *cellList,
-                      double weight,
-                      double cellVolume);
+int collide_particles(
+    Simulation *sim,
+    Config *conf
+);
 
 #endif //DSMC_COLLIDER_H

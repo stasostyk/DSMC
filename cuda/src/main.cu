@@ -41,8 +41,7 @@ int main(void) {
         apply_boundary_conditions_free_stream(&sim, &conf);
         index_particles(&sim);
         
-        sim.totalCollisions += 
-            collide_particles(&conf, sim.P, sim.cellCount, sim.cellList, sim.weight, sim.cellVolume);
+        sim.totalCollisions += collide_particles(&sim, &conf);
 
         if (step >= conf.firstSampleStep && step % conf.samplingPeriod == 0) {
             accumulate_sampling(&sim);
