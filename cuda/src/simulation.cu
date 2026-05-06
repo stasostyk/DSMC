@@ -123,8 +123,9 @@ void index_particles(Simulation *sim) {
 
     CHECK(cudaDeviceSynchronize());
 
-    dim3 threadsPerBlock2(128, 1, 1);
-    dim3 blocksPerGrid2((sim->NP + threadsPerBlock.x - 1) / threadsPerBlock.x, 1, 1);
+    int thr = 128;
+    dim3 threadsPerBlock2(thr, 1, 1);
+    dim3 blocksPerGrid2((sim->NP + thr - 1) / thr, 1, 1);
     bin_particles_kernel<<<blocksPerGrid2, threadsPerBlock2>>>(
         sim->d_P, sim->d_cellCount, sim->d_cellList, sim->NP,
         sim->dx, sim->dy, sim->dz
