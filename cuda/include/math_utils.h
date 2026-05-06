@@ -21,4 +21,20 @@ void diffuse_scattering(
     double KB
 );
 
+
+__device__
+void diffuse_scattering_y_device(
+    double *vx, double *vy, double *vz, double m, double T, double Ny, double KB,
+    curandState *rngState
+);
+
+__device__
+void diffuse_scattering_device(
+    double *vx, double *vy, double *vz, 
+    double m, double T, 
+    double nx, double ny, double nz,
+    double KB,
+    curandState *rngState
+);
+
 #endif //DSMC_MATH_UTILS_H
