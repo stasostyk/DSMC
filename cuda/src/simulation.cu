@@ -295,10 +295,10 @@ void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
     CHECK_KERNELCALL();
 
     int host_new_NP;
-    cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost);
+    CHECK(cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
     sim->NP = host_new_NP;
     
-    cudaMemcpy(sim->P, d_new_P, PARTICLES_SZ, cudaMemcpyDeviceToHost);
+    CHECK(cudaMemcpy(sim->P, d_new_P, sim->NP * sizeof(Particle), cudaMemcpyDeviceToHost));
 
     CHECK(cudaFree(d_new_NP));
     CHECK(cudaFree(d_new_P));
