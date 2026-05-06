@@ -8,12 +8,12 @@ set(CMAKE_CUDA_STANDARD 11)
 set(CMAKE_CUDA_ARCHITECTURES 75 86)
 
 set(SOURCES
-    src/main.c 
-    src/math_utils.c 
-    src/config.c 
-    src/collider.c 
+    src/main.cu
+    src/math_utils.cu 
+    src/config.cu 
+    src/collider.cu 
     src/simulation.cu
-    src/io_utils.c
+    src/io_utils.cu
     src/timer.c
     src/cuda_tst.cu
 )
