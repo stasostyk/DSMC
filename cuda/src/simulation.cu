@@ -2,15 +2,27 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <math.h>
+#include <cuda_runtime.h>
+#include <curand_kernel.h>
 #include "../include/simulation.h"
 #include "../include/config.h"
 #include "../include/math_utils.h"
 
+__global__ void init_rng_kernel(curandState *states, unsigned long seed) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= MAX_PARTICLES) return;
+    curand_init(seed, i, 0, &states[i]);
+}
+
 void setup(Simulation *sim, Config *conf) {
-    sim->P = malloc(MAX_PARTICLES * sizeof(Particle));
-    sim->samples = malloc(NX * NY * NZ * sizeof(Cell));
-    sim->cellCount = malloc(NX * NY * NZ * sizeof(int));
-    sim->cellList = malloc(NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int));
+    sim->P = (Particle *)malloc(MAX_PARTICLES * sizeof(Particle));
+
+    cudaMalloc(&sim->d_P, MAX_PARTICLES * sizeof(Particle));
+    cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState));
+
+    sim->samples = (Cell *)malloc(NX * NY * NZ * sizeof(Cell));
+    sim->cellCount = (int *)malloc(NX * NY * NZ * sizeof(int));
+    sim->cellList = (int *)malloc(NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int));
 
     sim->sampleSteps = 0;
     sim->NP = 0;
@@ -44,6 +56,14 @@ void setup(Simulation *sim, Config *conf) {
     sim->UzFree = 0.0;
 
     sim->weight = sim->NFree * sim->cellVolume / conf->particlesPerCellTarget;
+
+    // init randomness
+    int threads = 256;
+    dim3 threadsPerBlock(threads, 1, 1);
+    dim3 blocksPerGrid((MAX_PARTICLES + threads - 1) / threads, 1, 1);
+
+    // TODO put proper seed, as before with CPU
+    init_rng_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->rngStates, 1234);
 }
 
 void index_particles(Simulation *sim) {
@@ -70,6 +90,51 @@ void index_particles(Simulation *sim) {
         int n = sim->cellCount[IDX_CELL(k, l, m)];
         sim->cellList[IDX_LIST(k, l, m, n)] = i;
         sim->cellCount[IDX_CELL(k, l, m)]++;
+    }
+}
+
+__global__ void generate_particles_in_rect_kernel(
+    Particle *P,
+    Config *conf,
+    int start,
+    int Nnew,
+    double x1, double x2, 
+    double y1, double y2,
+    double z1, double z2,
+    double ux, double uy, double uz,
+    double dt,
+    double Tgas,
+    int moveFlag,
+    curandState *rngStates
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= Nnew) return;
+
+    int idx = start + i;
+    // TODO rngStates create a local variable -- don't access the global one
+
+    double rx = curand_uniform(&rngStates[idx]);
+    double ry = curand_uniform(&rngStates[idx]);
+    double rz = curand_uniform(&rngStates[idx]);
+
+    // TODO possibly better to create everything in local variable, and only then store in P?
+    P[idx].x = x1 + (x2 - x1) * rx;
+    P[idx].y = y1 + (y2 - y1) * ry;
+    P[idx].z = z1 + (z2 - z1) * rz;
+
+    // TODO compute the sqrt in CPU, and pass it to GPU as param
+    double vx = curand_normal(&rngStates[idx]) * sqrt(conf->KB * Tgas / conf->moleculeMass) + ux;
+    double vy = curand_normal(&rngStates[idx]) * sqrt(conf->KB * Tgas / conf->moleculeMass) + uy;
+    double vz = curand_normal(&rngStates[idx]) * sqrt(conf->KB * Tgas / conf->moleculeMass) + uz;
+
+    P[idx].vx = vx;
+    P[idx].vy = vy;
+    P[idx].vz = vz;
+
+    if (moveFlag) {
+        P[idx].x += dt * vx;
+        P[idx].y += dt * vy;
+        P[idx].z += dt * vz;
     }
 }
 
@@ -103,21 +168,24 @@ void generate_particles_in_rect(
         exit(1);
     }
 
-    for (int i = sim->NP; i < sim->NP + Nnew; i++) {
-        sim->P[i].x = x1 + (x2 - x1) * randu();
-        sim->P[i].y = y1 + (y2 - y1) * randu();
-        sim->P[i].z = z1 + (z2 - z1) * randu();
+    int threads = 256;
+    dim3 threadsPerBlock(threads, 1, 1);
+    dim3 blocksPerGrid((Nnew + threads - 1) / threads, 1, 1);
 
-        sim->P[i].vx = randn(ux, sqrt(conf->KB * Tgas / conf->moleculeMass)); // TODO don't calc sqrt every time
-        sim->P[i].vy = randn(uy, sqrt(conf->KB * Tgas / conf->moleculeMass));
-        sim->P[i].vz = randn(uz, sqrt(conf->KB * Tgas / conf->moleculeMass));
+    Config *d_C;
+    cudaMalloc(&d_C, sizeof(Config));
 
-        if (moveFlag) {
-            sim->P[i].x += conf->dt * sim->P[i].vx;
-            sim->P[i].y += conf->dt * sim->P[i].vy;
-            sim->P[i].z += conf->dt * sim->P[i].vz;
-        }
-    }
+    cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice);
+
+    generate_particles_in_rect_kernel<<<blocksPerGrid, threadsPerBlock>>>(
+        sim->d_P, d_C, sim->NP, Nnew, 
+        x1, x2, y1, y2, z1, z2, ux, uy, uz, 
+        conf->dt, Tgas, moveFlag, sim->rngStates
+    );
+
+    cudaFree(d_C);
+    cudaMemcpy(sim->P, sim->d_P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyDeviceToHost);
 
     sim->NP += Nnew;
 }
@@ -292,4 +360,7 @@ void clearPointers(Simulation *sim) {
     free(sim->samples);
     free(sim->cellCount);
     free(sim->cellList);
+
+    cudaFree(sim->d_P);
+    cudaFree(sim->rngStates);
 }

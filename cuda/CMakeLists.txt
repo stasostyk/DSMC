@@ -12,7 +12,7 @@ set(SOURCES
     src/math_utils.c 
     src/config.c 
     src/collider.c 
-    src/simulation.c
+    src/simulation.cu
     src/io_utils.c
     src/timer.c
     src/cuda_tst.cu

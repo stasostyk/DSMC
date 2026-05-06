@@ -10,24 +10,24 @@
 
 int main(void) {
 
-    const int N = 1024;
+    // const int N = 1024;
 
-    float a[N], b[N], c[N];
+    // float a[N], b[N], c[N];
 
-    for (int i = 0; i < N; ++i) {
-        a[i] = i;
-        b[i] = 2 * i;
-    }
+    // for (int i = 0; i < N; ++i) {
+    //     a[i] = i;
+    //     b[i] = 2 * i;
+    // }
 
-    vectorAdd(a, b, c, N);
+    // vectorAdd(a, b, c, N);
 
-    printf("VectorAdd result (first 5): ");
-    for (int i = 0; i < 5; ++i) {
-        printf("%f ", c[i]);
-    }
-    printf("\n");
+    // printf("VectorAdd result (first 5): ");
+    // for (int i = 0; i < 5; ++i) {
+    //     printf("%f ", c[i]);
+    // }
+    // printf("\n");
 
-    return 0; /////// TODO
+    // return 0; /////// TODO
 
     Timer t, allProgramTimer;
 
@@ -39,14 +39,14 @@ int main(void) {
     Simulation sim;
     Config conf;
 
-    // #ifdef WING_CASE
-        // printf("Running Wing case.\n");
-    // #elif defined(BALL_CASE)
+    #ifdef WING_CASE
+        printf("Running Wing case.\n");
+    #elif defined(BALL_CASE)
         printf("Running Ball case.\n");
-    // #else
-        // print("No case selected. Aborting.\n");
-        // return 0;
-    // #endif
+    #else
+        print("No case selected. Aborting.\n");
+        return 0;
+    #endif
 
     config_setup(&conf);
     setup(&sim, &conf);

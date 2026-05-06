@@ -7,10 +7,10 @@
 #include "../include/math_utils.h"
 
 void setup(Simulation *sim, Config *conf) {
-    sim->P = malloc(MAX_PARTICLES * sizeof(Particle));
-    sim->samples = malloc(NX * NY * NZ * sizeof(Cell));
-    sim->cellCount = malloc(NX * NY * NZ * sizeof(int));
-    sim->cellList = malloc(NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int));
+    sim->P = (Particle *)malloc(MAX_PARTICLES * sizeof(Particle));
+    sim->samples = (Cell *)malloc(NX * NY * NZ * sizeof(Cell));
+    sim->cellCount = (int *)malloc(NX * NY * NZ * sizeof(int));
+    sim->cellList = (int *)malloc(NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int));
 
     sim->sampleSteps = 0;
     sim->NP = 0;

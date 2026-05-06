@@ -5,11 +5,17 @@
 #include "cell.h"
 #include "config.h"
 
+#include <curand_kernel.h>
+
 #define IDX_CELL(k, l, m) ((k)*NY*NZ + (l)*NZ + m)
 #define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + q)
 
 typedef struct {
-    Particle *P;
+    curandState *rngStates; // for using randomness in GPU
+
+    Particle *P;   // used by host (CPU)
+    Particle *d_P; // used by device (GPU)
+
     Cell *samples;
     int *cellCount;
     int *cellList;
