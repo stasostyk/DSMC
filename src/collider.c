@@ -2,15 +2,8 @@
 #include "../include/config.h"
 #include "../include/math_utils.h"
 #include "../include/particle.h"
+#include "../include/simulation.h"
 #include <math.h>
-
-double sigmaRef;
-double CrRef;
-
-void collider_setup() {
-    sigmaRef = M_PI * dRef * dRef;
-    CrRef = sqrt(4.0 * KB * TFree / moleculeMass);
-}
 
 void elastic_collision(Particle *p1, Particle *p2, double Cr) {
     double N[3];
@@ -26,12 +19,12 @@ void elastic_collision(Particle *p1, Particle *p2, double Cr) {
     p2->vz = VC[2] - VCr[2];
 }
 
-int noTimeCounterScheme(Particle *P, int NPC, int *IPC, double weight, double cellVolume) {
+int noTimeCounterScheme(Config *conf, Particle *P, int NPC, int *IPC, double weight, double cellVolume) {
     if (NPC < 2) return 0;
 
     // estimate number of collisions
-    double majorant = 9.0 * sigmaRef * sqrt(KB * TFree / moleculeMass);
-    double estimatedCollidingPairs = 0.5 * NPC * (NPC - 1) * weight * majorant * dt / cellVolume;
+    double majorant = 9.0 * conf->sigmaRef * sqrt(conf->KB * conf->TFree / conf->moleculeMass);
+    double estimatedCollidingPairs = 0.5 * NPC * (NPC - 1) * weight * majorant * conf->dt / cellVolume;
     int expectedCollodingPairs = (int)estimatedCollidingPairs;
     if (randu() < estimatedCollidingPairs - expectedCollodingPairs) expectedCollodingPairs++;
 
@@ -53,7 +46,7 @@ int noTimeCounterScheme(Particle *P, int NPC, int *IPC, double weight, double ce
                                     + relativeVel[1] * relativeVel[1]
                                     + relativeVel[2] * relativeVel[2]);
 
-        double collisionProb = sigmaRef * pow(CrRef / relativeSpeed, 2.0*omega - 1.0) * relativeSpeed / majorant;
+        double collisionProb = conf->sigmaRef * pow(conf->CrRef / relativeSpeed, 2.0*conf->omega - 1.0) * relativeSpeed / majorant;
         if (randu() < collisionProb) {
             elastic_collision( &P[i], &P[j], relativeSpeed );
             collisions++;
@@ -63,16 +56,26 @@ int noTimeCounterScheme(Particle *P, int NPC, int *IPC, double weight, double ce
     return collisions;
 }
 
-int collide_particles(Particle *P, int cellCount[NX][NY][NZ], int cellList[NX][NY][NZ][MAX_PARTICLES_PER_CELL], double weight, double cellVolume) {
+int collide_particles(
+    Config *conf,
+    Particle *P, 
+    int *cellCount,
+    int *cellList, 
+    double weight, 
+    double cellVolume
+) {
     int totalCollisions = 0;
     for (int k = 0; k < NX; k++) {
         for (int l = 0; l < NY; l++) {
             for (int m = 0; m < NZ; m++) {
-                int collisions = noTimeCounterScheme(P,
-                                                     cellCount[k][l][m],
-                                                     cellList[k][l][m],
-                                                     weight,
-                                                     cellVolume);
+                int collisions = noTimeCounterScheme(
+                    conf, 
+                    P,
+                    cellCount[IDX_CELL(k, l, m)],
+                    &cellList[IDX_LIST(k, l, m, 0)],
+                    weight,
+                    cellVolume
+                );
                 totalCollisions += collisions;
             }
         }

@@ -7,57 +7,65 @@
 #define NY 10
 #define NZ 10
 
-extern const double KB;
-extern const double NA;
+typedef struct {
+    double KB;
+    double NA;
 
-// size of domain (m)
-extern const double Lx;
-extern const double Ly;
-extern const double Lz;
-extern const double DL;
+    // size of domain (m)
+    double Lx;
+    double Ly;
+    double Lz;
+    double DL;
 
-// gas properties
-extern const double molarMass;
+    // gas properties
+    double molarMass;
 
-// simulation loop parameters
-extern const double dt;
-extern const int nSteps;
-extern const int printPeriod;
-extern const int particlesPerCellTarget;
-extern const int firstSampleStep;
-extern const int samplingPeriod;
+    // simulation loop parameters
+    double dt;
+    int nSteps;
+    int printPeriod;
+    int particlesPerCellTarget;
+    int firstSampleStep;
+    int samplingPeriod;
 
-#ifdef WING_CASE
-    // wing
-    extern const double WingX;
-    extern const double WingY;
-    extern const double WingLength;
-    extern const double Tw;
+    #ifdef WING_CASE
+        // wing
+        double WingX;
+        double WingY;
+        double WingLength;
+        double Tw;
 
-    // stream
-    extern const double MaFree;
-    extern const double PFree;
-    extern const double TFree;
-    extern const double angleOfAttack;
-#elif defined(BALL_CASE)
-    // ball 
-    extern const double ballCenterX;
-    extern const double ballCenterY;
-    extern const double ballCenterZ;
-    extern const double ballRadius;
-    extern const double Tb;
+        // stream
+        double MaFree;
+        double PFree;
+        double TFree;
+        double angleOfAttack;
+    #elif defined(BALL_CASE)
+        // ball 
+        double ballCenterX;
+        double ballCenterY;
+        double ballCenterZ;
+        double ballRadius;
+        double Tb;
 
-    // stream
-    extern const double MaFree;
-    extern const double PFree;
-    extern const double TFree;
-#endif
+        // stream
+        double MaFree;
+        double PFree;
+        double TFree;
+    #endif
 
-// VHS model
-extern const double omega;
-extern const double dRef;
+    // VHS model
+    double omega;
+    double dRef;
 
-// derived parameters
-extern const double moleculeMass;
+    // derived parameters
+    double moleculeMass;
+
+    // derived, used in collider
+    double sigmaRef;
+    double CrRef;
+} Config;
+
+void config_setup(Config *config);
 
 #endif //DSMC_CONFIG_H
