@@ -26,5 +26,5 @@ set(SOURCES
 
 # Executable for Ball case
 add_executable(DSMC_ball ${SOURCES})
-#target_compile_definitions(DSMC_ball PRIVATE BALL_CASE)
+target_compile_definitions(DSMC_ball PRIVATE BALL_CASE)
 target_link_libraries(DSMC_ball PRIVATE m)

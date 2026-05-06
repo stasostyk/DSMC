@@ -23,7 +23,7 @@ int main(void) {
 
     printf("VectorAdd result (first 5): ");
     for (int i = 0; i < 5; ++i) {
-        printf("%i ", c[i]);
+        printf("%d ", c[i]);
     }
     printf("\n");
 
