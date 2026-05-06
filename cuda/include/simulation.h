@@ -5,20 +5,13 @@
 #include "cell.h"
 #include "config.h"
 
-// Only include CUDA headers when compiling with nvcc
-#ifdef __CUDACC__
 #include <curand_kernel.h>
-typedef curandState RNGState;
-#else
-// CPU fallback type
-typedef void* RNGState;
-#endif
 
 #define IDX_CELL(k, l, m) ((k)*NY*NZ + (l)*NZ + m)
 #define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + q)
 
 typedef struct {
-    RNGState *rngStates; // for using randomness in GPU
+    curandState *rngStates; // for using randomness in GPU
 
     Particle *P;   // used by host (CPU)
     Particle *d_P; // used by device (GPU)
