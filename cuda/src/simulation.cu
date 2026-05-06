@@ -232,6 +232,7 @@ void generate_particles_in_rect(
     );
     CHECK_KERNELCALL();
 
+    // TODO copying is probably only required for sim->NP particles
     CHECK(cudaMemcpy(sim->P, sim->d_P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyDeviceToHost));
     CHECK(cudaFree(d_C));
 
@@ -243,6 +244,26 @@ void initialize_particles(Simulation *sim, Config *conf) {
     generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 0);
 }
 
+__global__ void filter_particles_out_of_bounds(
+    Config *conf, Particle *P, Particle *P_out, int NP, int *new_NP
+) {
+    // TODO this can be possibly optimized:
+    // 1st kernel: mark the particles true/false if they need to be removed
+    // 2nd kernel: scan/prefix sum 
+    // 3rd kernel: (scatter) collect valid particles
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+
+    // check if particle valid
+    if (P[i].x >= 0.0 && P[i].x < conf->Lx &&
+        P[i].y >= 0.0 && P[i].y < conf->Ly &&
+        P[i].z >= 0.0 && P[i].z < conf->Lz
+    ) {
+        int pos = atomicAdd(new_NP, 1);
+        P_out[pos] = P[i];
+    }
+}
 
 void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
     generate_particles_in_rect(sim, conf, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
@@ -252,20 +273,33 @@ void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
     generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, conf->TFree, 1);
     generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, conf->TFree, 1);
 
-    // TODO this can also be done with CUDA, but trickier, idea:
-    // 1st kernel: mark the particles true/false if they need to be removed
-    // 2nd kernel: scan/prefix sum 
-    // 3rd kernel: (scatter) collect valid particles
-    for (int i = 0; i < sim->NP; i++) {
-        if (sim->P[i].x < 0.0 || sim->P[i].x >= conf->Lx 
-            || sim->P[i].y < 0.0 || sim->P[i].y >= conf->Ly 
-            || sim->P[i].z < 0.0 || sim->P[i].z >= conf->Lz
-        ) {
-            sim->P[i] = sim->P[sim->NP - 1];
-            sim->NP--;
-            i--;
-        }
-    }
+    int threads = 256;
+    dim3 threadsPerBlock(threads, 1, 1);
+    dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
+
+    Config *d_C;
+    CHECK(cudaMalloc(&d_C, sizeof(Config)));
+
+    int *d_new_NP;
+    Particle *d_new_P;
+    CHECK(cudaMalloc(&d_new_NP, sizeof(int)));
+    CHECK(cudaMalloc(&d_new_P, sim->NP * sizeof(Particle)));
+    CHECK(cudaMemset(&d_new_NP, 0, sizeof(int)));
+
+    filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
+        d_C, sim->d_P, d_new_P, sim->NP, d_new_NP
+    );
+    CHECK_KERNELCALL();
+
+    int host_new_NP;
+    cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost);
+    sim->NP = host_new_NP;
+    
+    cudaMemcpy(sim->P, d_new_NP, PARTICLES_SZ, cudaMemcpyDeviceToHost);
+
+    CHECK(cudaFree(d_new_NP));
+    CHECK(cudaFree(d_new_P));
+    CHECK(cudaFree(d_C));
 }
 
 __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandState *rngStates) {
