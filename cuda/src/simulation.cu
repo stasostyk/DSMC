@@ -327,11 +327,11 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
     double WingY = conf->WingY;
     double WingLength = conf->WingLength;
 
-    if ( ( Y0 - WingY ) * ( sim->P[i].y - WingY ) < 0.0 ) {
+    if ( ( Y0 - WingY ) * ( P[i].y - WingY ) < 0.0 ) {
         // Linear interpolation to point Y = WingY
-        double Xw=( X0*(WingY-sim->P[i].y)+P[i].x*(Y0-WingY))/(Y0-P[i].y);
-        double Zw=( Z0*(WingY-sim->P[i].y)+P[i].z*(Y0-WingY))/(Y0-P[i].y);
-        if ( Zw < 0.3 || Zw > 0.7 ) continue; // wing only occupies 0.3 < z < 0.7
+        double Xw=( X0*(WingY-P[i].y)+P[i].x*(Y0-WingY))/(Y0-P[i].y);
+        double Zw=( Z0*(WingY-P[i].y)+P[i].z*(Y0-WingY))/(Y0-P[i].y);
+        if ( Zw < 0.3 || Zw > 0.7 ) return; // wing only occupies 0.3 < z < 0.7
         if ( Xw > WingX && Xw < WingX + WingLength ) {
             // Molecule interacts with the wing during the time step
             // Linear interpolation of the time of scattering, Eq. (6.5.4)
