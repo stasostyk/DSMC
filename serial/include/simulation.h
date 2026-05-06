@@ -1,0 +1,39 @@
+#ifndef SIMULATION_H
+#define SIMULATION_H
+
+#include "particle.h"
+#include "cell.h"
+#include "config.h"
+
+#define IDX_CELL(k, l, m) ((k)*NY*NZ + (l)*NZ + m)
+#define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + q)
+
+typedef struct {
+    Particle *P;
+    Cell *samples;
+    int *cellCount;
+    int *cellList;
+
+    // counters
+    int sampleSteps;
+    int NP;
+    long long totalCollisions;
+
+    // derived quantities
+    double dx, dy, dz;
+    double cellVolume;
+    double weight;
+    double NFree;
+    double UFree;
+    double UxFree, UyFree, UzFree;
+} Simulation;
+
+void setup(Simulation *sim, Config *conf);
+void index_particles(Simulation *sim);
+void initialize_particles(Simulation *sim, Config *conf);
+void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf);
+void move_particles(Simulation *sim, Config *conf);
+void accumulate_sampling(Simulation *sim);
+void clearPointers(Simulation *sim);
+
+#endif // SIMULATION_H
