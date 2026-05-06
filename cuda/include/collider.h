@@ -2,11 +2,8 @@
 #define DSMC_COLLIDER_H
 
 #include "config.h"
-#include "particle.h"
+#include "simulation.h"
 
-int collide_particles(
-    Simulation *sim,
-    Config *conf
-);
+int collide_particles(Simulation *sim, Config *conf);
 
 #endif //DSMC_COLLIDER_H
