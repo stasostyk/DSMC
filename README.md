@@ -25,3 +25,7 @@ With `plot.py` the plot can be generated:
 ```
 
 When running `./DSMC`, the `.vpi` and `.vpt` files are created that can be opened with ParaView.
+
+### CUDA version
+
+To run CUDA version, follow the steps from [cuda/colab_run.ipynb](cuda/colab_run.ipynb). We have used it to run the code inside Google Colab, using T4 GPUs.
