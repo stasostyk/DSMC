@@ -14,7 +14,7 @@ void move_neccessary_data_before_printing(Simulation *sim) {
     // to have the newest version in CPU, it needs to be copied.
     CHECK(cudaMemcpy(sim->P, sim->d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
     CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
-}
+} 
 
 int main(void) {
     Timer t, allProgramTimer;
