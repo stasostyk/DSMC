@@ -14,6 +14,10 @@ typedef struct {
     curandState *rngStates; // for using randomness in GPU
                             // allocated in device memory (GPU)
 
+    // Particles will be initialized by device kernels, and during simulation
+    // will be dealt only by kernels (GPU). There is no need to allocate
+    // the same particle data on CPU and keep moving data.
+    // Particles in CPU are only moved to count and print global diagnostics data.
     Particle *P;   // allocated in host memory (CPU)
     Particle *d_P; // allocated in device memory (GPU)
 

@@ -2,11 +2,13 @@
 #include <stdio.h>
 #include <time.h>
 #include <math.h>
+#include <cuda_runtime.h>
 #include "../include/collider.h"
 #include "../include/simulation.h"
 #include "../include/io_utils.h"
 #include "../include/timer.h"
 #include "../include/cuda_tst.h"
+#include "../include/cuda_utils.h"
 
 int main(void) {
     Timer t, allProgramTimer;
@@ -48,6 +50,10 @@ int main(void) {
         }
 
         if (step % conf.printPeriod == 0) {
+            // Particle data is mostly stored in and dealt in GPU, 
+            // to have the newest version in CPU, it needs to be copied.
+            CHECK(cudaMemcpy(sim.P, sim.d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
+
             print_global_diagnostics(&sim, &conf, step);
         }
     }
@@ -55,6 +61,10 @@ int main(void) {
     timer_end(&t);
     timer_print(&t, "SIMULATION LOOP");
 
+    // Particle data is mostly stored in and dealt in GPU, 
+    // to have the newest version in CPU, it needs to be copied.
+    CHECK(cudaMemcpy(sim.P, sim.d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
+    
     print_global_diagnostics(&sim, &conf, conf.nSteps);
     write_averaged_macros(&sim, &conf, "fields_avg.dat");
     write_paraview_files(&sim, &conf, conf.nSteps);
