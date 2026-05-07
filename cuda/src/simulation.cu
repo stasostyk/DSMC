@@ -131,11 +131,12 @@ __global__ void generate_particles_in_rect_kernel(
     double dt = d_conf.dt;
 
     int idx = start + i;
-    // TODO rngStates create a local variable -- don't access the global one
 
-    double rx = curand_uniform(&rngStates[idx]);
-    double ry = curand_uniform(&rngStates[idx]);
-    double rz = curand_uniform(&rngStates[idx]);
+    curandState rngState = rngStates[idx];
+
+    double rx = curand_uniform(&rngState);
+    double ry = curand_uniform(&rngState);
+    double rz = curand_uniform(&rngState);
 
     // TODO possibly better to create everything in local variable, and only then store in P?
     P[idx].x = x1 + (x2 - x1) * rx;
@@ -143,9 +144,9 @@ __global__ void generate_particles_in_rect_kernel(
     P[idx].z = z1 + (z2 - z1) * rz;
 
     // TODO compute the sqrt in CPU, and pass it to GPU as param
-    double vx = curand_normal(&rngStates[idx]) * d_conf.generation_derivatedMultiplier + ux;
-    double vy = curand_normal(&rngStates[idx]) * d_conf.generation_derivatedMultiplier + uy;
-    double vz = curand_normal(&rngStates[idx]) * d_conf.generation_derivatedMultiplier + uz;
+    double vx = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + ux;
+    double vy = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + uy;
+    double vz = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + uz;
 
     P[idx].vx = vx;
     P[idx].vy = vy;
@@ -156,6 +157,8 @@ __global__ void generate_particles_in_rect_kernel(
         P[idx].y += dt * vy;
         P[idx].z += dt * vz;
     }
+
+    rngStates[idx] = rngState;
 }
 
 
@@ -274,6 +277,8 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngState
     P[i].y += d_conf.dt * P[i].vy;
     P[i].z += d_conf.dt * P[i].vz;
 
+    curandState rngState = rngStates[i];
+
 
     #ifdef WING_CASE
     double dt = d_conf.dt;
@@ -297,7 +302,7 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngState
                 &(P[i].vx), &(P[i].vy), &(P[i].vz), 
                 moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
                 d_conf.KB,
-                &rngStates[i]
+                &rngState
             );
             // Move the reflected molecule
             P[i].x = Xw + Dt1 * P[i].vx;
@@ -364,7 +369,7 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngState
                 diffuse_scattering_device(&(P[i].vx), &(P[i].vy), &(P[i].vz),
                                 d_conf.moleculeMass, d_conf.Tb,
                                 nx, ny, nz, d_conf.KB,
-                                &rngStates[i]
+                                &rngState
                             );
 
                 // Move after collision
@@ -377,6 +382,7 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngState
 
     #endif
 
+    rngStates[i] = rngState;
 }
 
 void move_particles(Simulation *sim) {

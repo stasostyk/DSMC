@@ -38,19 +38,21 @@ __global__ void no_time_counter_scheme_kernel(
 
     int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
 
+    curandState rngState = rngStates[idx];
+
     // estimate number of collisions
     double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
     int expectedCollidingPairs = (int)estimatedCollidingPairs;
-    if (curand_uniform(&rngStates[idx]) < estimatedCollidingPairs - expectedCollidingPairs) expectedCollidingPairs++;
+    if (curand_uniform(&rngState) < estimatedCollidingPairs - expectedCollidingPairs) expectedCollidingPairs++;
 
     // monte carlo accept/reject pairs and collide
     int collisions = 0;
     int i, j; // two particles to collide
 
     for (int k = 0; k < expectedCollidingPairs; k++) {
-        i = (int)(curand_uniform(&rngStates[idx]) * NPC);
+        i = (int)(curand_uniform(&rngState) * NPC);
         do {
-            j = (int)(curand_uniform(&rngStates[idx]) * NPC);
+            j = (int)(curand_uniform(&rngState) * NPC);
         } while (j == i);
 
         i = IPC[i];
@@ -62,14 +64,15 @@ __global__ void no_time_counter_scheme_kernel(
                                     + relativeVel[2] * relativeVel[2]);
 
         double collisionProb = pow(d_conf.CrRef / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed * d_conf.ntcs_invMajorantTimesSigmaRef;
-        if (curand_uniform(&rngStates[idx]) < collisionProb) {
-            elastic_collision( &P[i], &P[j], relativeSpeed, &rngStates[idx] );
+        if (curand_uniform(&rngState) < collisionProb) {
+            elastic_collision( &P[i], &P[j], relativeSpeed, &rngState );
             collisions++;
         }
 
     }
 
     atomicAdd(total_collisions, collisions);
+    rngStates[idx] = rngState;
 }
 
 int collide_particles(Simulation *sim) {
