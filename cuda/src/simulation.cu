@@ -19,8 +19,8 @@ void setup(Simulation *sim, Config *conf) {
     sim->conf = (Config *) malloc(sizeof(Config));
     CHECK(cudaMalloc(&sim->d_conf, sizeof(Config)));
 
-    memcpy(&sim->conf, &conf, sizeof(Config));
-    CHECK(cudaMemcpy(&sim->d_conf, &conf, sizeof(Config), cudaMemcpyHostToDevice));
+    memcpy(sim->conf, conf, sizeof(Config));
+    CHECK(cudaMemcpy(sim->d_conf, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
     sim->P = (Particle *)malloc(PARTICLES_SZ);
     sim->samples = (Cell *)malloc(SAMPLES_SZ);
