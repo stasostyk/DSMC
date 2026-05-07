@@ -26,57 +26,81 @@ void elastic_collision(Particle *p1, Particle *p2, double Cr, curandState *rngSt
 __global__ void no_time_counter_scheme_kernel(
     int *total_collisions, Particle *P, int *cellCount, int *cellList, curandState *rngStates
 ) {
+    __shared__ int collisionsBlock[64];
+
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     int l = blockIdx.y * blockDim.y + threadIdx.y;
     int m = blockIdx.z * blockDim.z + threadIdx.z;
-    int idx = IDX_CELL(k, l, m);
 
-    if (k >= NX || l >= NY || m >= NZ) return;
-
-    int NPC = cellCount[IDX_CELL(k, l, m)];
-    if (NPC < 2) return;
-
-    int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
-
-    curandState rngState = rngStates[idx];
-
-    // estimate number of collisions
-    double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
-    int expectedCollidingPairs = (int)estimatedCollidingPairs;
-    if (curand_uniform(&rngState) < estimatedCollidingPairs - expectedCollidingPairs) expectedCollidingPairs++;
-
-    // monte carlo accept/reject pairs and collide
     int collisions = 0;
-    int i, j; // two particles to collide
 
-    for (int k = 0; k < expectedCollidingPairs; k++) {
-        i = (int)(curand_uniform(&rngState) * NPC);
-        do {
-            j = (int)(curand_uniform(&rngState) * NPC);
-        } while (j == i);
+    if (k < NX && l < NY && m < NZ) {
+        int idx = IDX_CELL(k, l, m);
+        int NPC = cellCount[idx];
+        if (NPC >= 2) {
 
-        i = IPC[i];
-        j = IPC[j];
+            int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
 
-        double relativeVel[3] = { P[j].vx - P[i].vx, P[j].vy - P[i].vy, P[j].vz - P[i].vz };
-        double relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
-                                    + relativeVel[1] * relativeVel[1]
-                                    + relativeVel[2] * relativeVel[2]);
+            curandState rngState = rngStates[idx];
 
-        // The real value to be calculated:
-        // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
-        // But, we assume omega=0.75, which lets us remove pow() in a simple way:
-        // double collisionProb = d_conf.ntcs_collisionProbMultiplier * rsqrt(relativeSpeed) * relativeSpeed;
-        double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
-        if (curand_uniform(&rngState) < collisionProb) {
-            elastic_collision( &P[i], &P[j], relativeSpeed, &rngState );
-            collisions++;
+            // estimate number of collisions
+            double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
+            int expectedCollidingPairs = (int)estimatedCollidingPairs;
+            if (curand_uniform(&rngState) < estimatedCollidingPairs - expectedCollidingPairs) expectedCollidingPairs++;
+
+            // monte carlo accept/reject pairs and collide
+            int i, j; // two particles to collide
+
+            for (int k = 0; k < expectedCollidingPairs; k++) {
+                i = (int)(curand_uniform(&rngState) * NPC);
+                do {
+                    j = (int)(curand_uniform(&rngState) * NPC);
+                } while (j == i);
+
+                i = IPC[i];
+                j = IPC[j];
+
+                double relativeVel[3] = { P[j].vx - P[i].vx, P[j].vy - P[i].vy, P[j].vz - P[i].vz };
+                double relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
+                                            + relativeVel[1] * relativeVel[1]
+                                            + relativeVel[2] * relativeVel[2]);
+
+                // The real value to be calculated:
+                // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
+                // But, we assume omega=0.75, which lets us remove pow() in a simple way:
+                double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
+                if (curand_uniform(&rngState) < collisionProb) {
+                    elastic_collision( &P[i], &P[j], relativeSpeed, &rngState );
+                    collisions++;
+                }
+
+            }
+            rngStates[idx] = rngState;
         }
-
     }
 
-    atomicAdd(total_collisions, collisions);
-    rngStates[idx] = rngState;
+    // TODO maybe this calculation should be done in row major ordening?
+    // (check warp convergence, and how cuda assigns IDs to 3d thread blocks)
+    int tid =
+        threadIdx.x * blockDim.y * blockDim.z +
+        threadIdx.y * blockDim.z +
+        threadIdx.z;
+    collisionsBlock[tid] = collisions;
+
+    __syncthreads();
+
+    // Sum all collisions from the threads in this block (reduction)
+    for (int stride = 32; stride > 0; stride >>= 1) {
+        if (tid < stride) {
+            collisionsBlock[tid] += collisionsBlock[tid + stride];
+        }
+
+        __syncthreads();
+    }
+    
+    if (tid == 0) {
+        atomicAdd(total_collisions, collisionsBlock[0]);
+    }
 }
 
 int collide_particles(Simulation *sim) {
