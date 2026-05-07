@@ -52,7 +52,8 @@ void config_setup(Config *config) {
     #endif
 
     // VHS model
-    config->omega = 0.77;          // or ~0.74 to 0.77 for air-like species
+    // NOTE: collider calculations assume omega=0.75, so be careful when changing
+    config->omega = 0.75;          // or ~0.74 to 0.77 for air-like species
     config->dRef  = 4.0e-10;       // reference diameter, meters
 
     // derived parameters
@@ -82,7 +83,7 @@ void config_setup(Config *config) {
 
     // precompute multiplier used in no time collision scheme
     double majorant = 9.0 * config->sigmaRef * sqrt(config->KB * config->TFree / config->moleculeMass);
-    config->ntcs_invMajorantTimesSigmaRef = config->sigmaRef / majorant;
+    config->ntcs_collisionProbMultiplier = pow(d_conf.CrRef, d_conf.ntcs_collisionProbExponent) * config->sigmaRef / majorant;
     config->ntcs_collidingPairsMultiplier = 0.5 * config->weight * majorant * config->dt / config->cellVolume;
     config->ntcs_collisionProbExponent = 2.0*config->omega - 1.0;
 

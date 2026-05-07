@@ -63,7 +63,7 @@ __global__ void no_time_counter_scheme_kernel(
                                     + relativeVel[1] * relativeVel[1]
                                     + relativeVel[2] * relativeVel[2]);
 
-        double collisionProb = pow(d_conf.CrRef / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed * d_conf.ntcs_invMajorantTimesSigmaRef;
+        double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
         if (curand_uniform(&rngState) < collisionProb) {
             elastic_collision( &P[i], &P[j], relativeSpeed, &rngState );
             collisions++;
