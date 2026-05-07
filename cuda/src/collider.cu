@@ -66,7 +66,8 @@ __global__ void no_time_counter_scheme_kernel(
         // The real value to be calculated:
         // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
         // But, we assume omega=0.75, which lets us remove pow() in a simple way:
-        double collisionProb = d_conf.ntcs_collisionProbMultiplier * rsqrt(relativeSpeed) * relativeSpeed;
+        // double collisionProb = d_conf.ntcs_collisionProbMultiplier * rsqrt(relativeSpeed) * relativeSpeed;
+        double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
         if (curand_uniform(&rngState) < collisionProb) {
             elastic_collision( &P[i], &P[j], relativeSpeed, &rngState );
             collisions++;
