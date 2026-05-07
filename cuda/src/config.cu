@@ -53,7 +53,7 @@ void config_setup(Config *config) {
 
     // VHS model
     // NOTE: collider calculations assume omega=0.75, so be careful when changing
-    config->omega = 0.75;          // or ~0.74 to 0.77 for air-like species
+    config->omega = 0.77;          // or ~0.74 to 0.77 for air-like species
     config->dRef  = 4.0e-10;       // reference diameter, meters
 
     // derived parameters
