@@ -18,8 +18,8 @@ __global__ void init_rng_kernel(curandState *states, unsigned long seed) {
 void setup(Simulation *sim, Config *conf) {
     sim->P = (Particle *)malloc(PARTICLES_SZ);
     sim->samples = (Cell *)malloc(SAMPLES_SZ);
-    sim->cellCount = (int *)malloc(CELL_COUNT_SZ);
-    sim->cellList = (int *)malloc(CELL_LIST_SZ);
+    // sim->cellCount = (int *)malloc(CELL_COUNT_SZ);
+    // sim->cellList = (int *)malloc(CELL_LIST_SZ);
 
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
     CHECK(cudaMalloc(&sim->d_P, PARTICLES_SZ));
@@ -33,7 +33,8 @@ void setup(Simulation *sim, Config *conf) {
 
     // TODO: most of the setup can be moved to constexpr??
 
-    memset(sim->samples, 0, sizeof(sim->samples));
+    // memset(sim->samples, 0, sizeof(sim->samples));
+    cudaMemset(sim->d_samples, 0, SAMPLES_SZ);
 
     sim->dx = conf->Lx / NX;
     sim->dy = conf->Ly / NY;
@@ -107,8 +108,8 @@ __global__ void bin_particles_kernel(
 }
 
 void index_particles(Simulation *sim) {
-    CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
     // CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
 
     dim3 threadsPerBlock(8, 8, 8);
@@ -133,8 +134,8 @@ void index_particles(Simulation *sim) {
     );
     CHECK_KERNELCALL();
 
-    CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
+    // CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
+    // CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
     // CHECK(cudaMemcpy(sim->P, sim->d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
 }
 
@@ -266,6 +267,10 @@ __global__ void filter_particles_out_of_bounds(
 }
 
 void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
+    // TODO potentially could be done all in parallel?
+    // TODO maybe the kernels to generate particles could be started even before
+    //      the previous task (move_particles) is finished because generation
+    //      could be done in a way so that it doesnt overlap? (note: use different streams)
     generate_particles_in_rect(sim, conf, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
     generate_particles_in_rect(sim, conf, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
     generate_particles_in_rect(sim, conf, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, conf->TFree, 1);
@@ -476,10 +481,10 @@ __global__ void accumulate_sampling_kernel(
 void accumulate_sampling(Simulation *sim) {
     sim->sampleSteps++;
 
-    CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
     // CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(sim->d_samples, sim->samples, SAMPLES_SZ, cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(sim->d_samples, sim->samples, SAMPLES_SZ, cudaMemcpyHostToDevice));
 
     dim3 threadsPerBlock(8, 8, 8);
     dim3 blocksPerGrid(
@@ -493,17 +498,17 @@ void accumulate_sampling(Simulation *sim) {
     );
     CHECK_KERNELCALL();
 
-    CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
+    // CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
+    // CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
     // CHECK(cudaMemcpy(sim->P, sim->d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
+    // CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
 }
 
 void clearPointers(Simulation *sim) {
     free(sim->P);
     free(sim->samples);
-    free(sim->cellCount);
-    free(sim->cellList);
+    // free(sim->cellCount);
+    // free(sim->cellList);
 
     CHECK(cudaFree(sim->rngStates));
     CHECK(cudaFree(sim->d_P));
