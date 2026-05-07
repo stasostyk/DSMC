@@ -4,7 +4,7 @@
 #include "../include/io_utils.h"
 #include "../include/simulation.h"
 
-void print_global_diagnostics(Simulation *sim, Config *conf, int step) {
+void print_global_diagnostics(Simulation *sim, int step) {
     double sumVx = 0.0, sumVy = 0.0, sumVz = 0.0;
 
     for (int i = 0; i < sim->NP; i++) {
@@ -25,7 +25,7 @@ void print_global_diagnostics(Simulation *sim, Config *conf, int step) {
         sumC2 += cx * cx + cy * cy + cz * cz;
     }
 
-    double T = conf->moleculeMass * sumC2 / (3.0 * conf->KB * sim->NP);
+    double T = sim->conf->moleculeMass * sumC2 / (3.0 * sim->conf->KB * sim->NP);
 
     printf("step=%d\n", step);
     printf("  NP=%d\n", sim->NP);
@@ -34,7 +34,7 @@ void print_global_diagnostics(Simulation *sim, Config *conf, int step) {
     printf("  totalCollisions = %lld\n", sim->totalCollisions);
 }
 
-void write_averaged_macros(Simulation *sim, Config *conf, const char *filename) {
+void write_averaged_macros(Simulation *sim, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open output file\n");
@@ -68,7 +68,7 @@ void write_averaged_macros(Simulation *sim, Config *conf, const char *filename) 
                 double meanU2 = ux * ux + uy * uy + uz * uz;
 
                 double n = sim->weight * avgNP / sim->cellVolume;
-                double T = conf->moleculeMass * (meanV2 - meanU2) / (3.0 * conf->KB);
+                double T = sim->conf->moleculeMass * (meanV2 - meanU2) / (3.0 * conf->KB);
 
                 fprintf(fp, "%e %e %e %e %e %e %e %e %e\n",
                         xc, yc, zc, n, ux, uy, uz, T, avgNP);
@@ -81,7 +81,7 @@ void write_averaged_macros(Simulation *sim, Config *conf, const char *filename) 
     fclose(fp);
 }
 
-void write_vti(Simulation *sim, Config *conf, const char *filename) {
+void write_vti(Simulation *sim, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open VTI file\n");
@@ -145,7 +145,7 @@ void write_vti(Simulation *sim, Config *conf, const char *filename) {
                     double meanV2 = sim->samples[IDX_CELL(k, l, m)].countV2 / count;
                     double meanU2 = ux*ux + uy*uy + uz*uz;
 
-                    T = conf->moleculeMass * (meanV2 - meanU2) / (3.0 * conf->KB);
+                    T = sim->conf->moleculeMass * (meanV2 - meanU2) / (3.0 * conf->KB);
                 }
 
                 fprintf(fp, "%e ", T);
@@ -162,16 +162,16 @@ void write_vti(Simulation *sim, Config *conf, const char *filename) {
 }
 
 #ifdef WING_CASE
-void write_wing_vtp(Config *conf, const char *filename) {
+void write_wing_vtp(Simulation *sim, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open wing file\n");
         exit(1);
     }
 
-    double x0 = conf->WingX;
-    double x1 = conf->WingX + conf->WingLength;
-    double y  = conf->WingY;
+    double x0 = sim->conf->WingX;
+    double x1 = sim->conf->WingX + sim->conf->WingLength;
+    double y  = sim->conf->WingY;
     double z0 = 0.3;
     double z1 = 0.7;
 
@@ -213,7 +213,7 @@ void write_wing_vtp(Config *conf, const char *filename) {
 #endif
 
 #ifdef BALL_CASE
-void write_ball_vtp(Config *conf, const char *filename) {
+void write_ball_vtp(Simulation *sim, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open ball output file\n");
@@ -243,9 +243,9 @@ void write_ball_vtp(Config *conf, const char *filename) {
         for (int j = 0; j <= n_phi; j++) {
             double phi = 2.0 * M_PI * j / n_phi; // 0 -> 2pi
 
-            double x = conf->ballCenterX + conf->ballRadius * sin(theta) * cos(phi);
-            double y = conf->ballCenterY + conf->ballRadius * sin(theta) * sin(phi);
-            double z = conf->ballCenterZ + conf->ballRadius * cos(theta);
+            double x = sim->conf->ballCenterX + sim->conf->ballRadius * sin(theta) * cos(phi);
+            double y = sim->conf->ballCenterY + sim->conf->ballRadius * sin(theta) * sin(phi);
+            double z = sim->conf->ballCenterZ + sim->conf->ballRadius * cos(theta);
 
             fprintf(fp, "%e %e %e\n", x, y, z);
         }
@@ -299,18 +299,18 @@ void write_ball_vtp(Config *conf, const char *filename) {
 }
 #endif
 
-void write_paraview_files(Simulation *sim, Config *conf, unsigned int step) {
+void write_paraview_files(Simulation *sim, unsigned int step) {
     char fname[64];
     sprintf(fname, "paraview_fields_%05d.vti", step);
-    write_vti(sim, conf, fname);
+    write_vti(sim, fname);
 
     #ifdef WING_CASE
         char wing_fname[64];
         sprintf(wing_fname, "paraview_wing_%05d.vtp", step);
-        write_wing_vtp(conf, wing_fname);
+        write_wing_vtp(sim, wing_fname);
     #elif defined(BALL_CASE)
         char ball_fname[64];
         sprintf(ball_fname, "paraview_ball_%05d.vtp", step);
-        write_ball_vtp(conf, ball_fname);
+        write_ball_vtp(sim, ball_fname);
     #endif
 }

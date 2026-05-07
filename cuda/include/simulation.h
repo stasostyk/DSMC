@@ -14,6 +14,11 @@ typedef struct {
     curandState *rngStates; // for using randomness in GPU
                             // allocated in device memory (GPU)
 
+    // TODO config maybe could be used in constant memory on GPU
+    // (to avoid so many accesses to global memory)
+    Config *conf;   // allocated in host (CPU)
+    Config *d_conf; // allocated in device (GPU)    
+
     // Particles will be initialized by device kernels, and during simulation
     // will be dealt only by kernels (GPU). There is no need to allocate
     // the same particle data on CPU and keep moving data.
@@ -42,9 +47,9 @@ typedef struct {
 
 void setup(Simulation *sim, Config *conf);
 void index_particles(Simulation *sim);
-void initialize_particles(Simulation *sim, Config *conf);
-void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf);
-void move_particles(Simulation *sim, Config *conf);
+void initialize_particles(Simulation *sim);
+void apply_boundary_conditions_free_stream(Simulation *sim);
+void move_particles(Simulation *sim);
 void accumulate_sampling(Simulation *sim);
 void clearPointers(Simulation *sim);
 

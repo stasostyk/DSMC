@@ -16,6 +16,12 @@ __global__ void init_rng_kernel(curandState *states, unsigned long seed) {
 }
 
 void setup(Simulation *sim, Config *conf) {
+    sim->conf = (Config *) malloc(sizeof(Config));
+    CHECK(cudaMalloc(&sim->d_conf, sizeof(Config)));
+
+    memcpy(&sim->conf, &conf, sizeof(Config));
+    CHECK(cudaMemcpy(&sim->d_conf, &conf, sizeof(Config), cudaMemcpyHostToDevice));
+
     sim->P = (Particle *)malloc(PARTICLES_SZ);
     sim->samples = (Cell *)malloc(SAMPLES_SZ);
     // sim->cellCount = (int *)malloc(CELL_COUNT_SZ);
@@ -187,7 +193,6 @@ __global__ void generate_particles_in_rect_kernel(
 
 void generate_particles_in_rect(
     Simulation *sim,
-    Config *conf,
     double x1, double x2,
     double y1, double y2,
     double z1, double z2,
@@ -218,31 +223,31 @@ void generate_particles_in_rect(
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((Nnew + threads - 1) / threads, 1, 1);
 
-    Config *d_C;
-    CHECK(cudaMalloc(&d_C, sizeof(Config)));
+    // Config *d_C;
+    // CHECK(cudaMalloc(&d_C, sizeof(Config)));
 
     // TODO: probably can be optimized that in simulation loop not always the cuda memcpy is needed
     // (takes a lot of time)
     // CHECK(cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
     generate_particles_in_rect_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_P, d_C, sim->NP, Nnew, 
+        sim->d_P, sim->d_conf, sim->NP, Nnew, 
         x1, x2, y1, y2, z1, z2, ux, uy, uz, 
-        conf->dt, Tgas, moveFlag, sim->rngStates
+        sim->conf->dt, Tgas, moveFlag, sim->rngStates
     );
     CHECK_KERNELCALL();
 
     // TODO copying is probably only required for sim->NP particles
     // CHECK(cudaMemcpy(sim->P, sim->d_P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyDeviceToHost));
-    CHECK(cudaFree(d_C));
+    // CHECK(cudaFree(d_C));
 
     sim->NP += Nnew;
 }
 
-void initialize_particles(Simulation *sim, Config *conf) {
+void initialize_particles(Simulation *sim) {
     sim->NP = 0;
-    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 0);
+    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 0);
 }
 
 __global__ void filter_particles_out_of_bounds(
@@ -266,24 +271,24 @@ __global__ void filter_particles_out_of_bounds(
     }
 }
 
-void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
+void apply_boundary_conditions_free_stream(Simulation *sim) {
     // TODO potentially could be done all in parallel?
     // TODO maybe the kernels to generate particles could be started even before
     //      the previous task (move_particles) is finished because generation
     //      could be done in a way so that it doesnt overlap? (note: use different streams)
-    generate_particles_in_rect(sim, conf, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
-    generate_particles_in_rect(sim, conf, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
-    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, conf->TFree, 1);
-    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, conf->TFree, 1);
-    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, conf->TFree, 1);
-    generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, conf->TFree, 1);
+    generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
+    generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
+    generate_particles_in_rect(sim, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, conf->TFree, 1);
+    generate_particles_in_rect(sim, 0.0, conf->Lx, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, conf->TFree, 1);
+    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, conf->TFree, 1);
+    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, conf->TFree, 1);
 
     int threads = 256;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    Config *d_C;
-    CHECK(cudaMalloc(&d_C, sizeof(Config)));
+    // Config *d_C;
+    // CHECK(cudaMalloc(&d_C, sizeof(Config)));
 
     int *d_new_NP;
     Particle *d_new_P;
@@ -292,10 +297,10 @@ void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
     CHECK(cudaMemset(d_new_NP, 0, sizeof(int)));
 
     // CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
     filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
-        d_C, sim->d_P, d_new_P, sim->NP, d_new_NP
+        sim->d_conf, sim->d_P, d_new_P, sim->NP, d_new_NP
     );
     CHECK_KERNELCALL();
 
@@ -308,7 +313,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf) {
 
     CHECK(cudaFree(d_new_NP));
     CHECK(cudaFree(d_new_P));
-    CHECK(cudaFree(d_C));
+    // CHECK(cudaFree(d_C));
 }
 
 __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandState *rngStates) {
@@ -435,19 +440,19 @@ void move_particles(Simulation *sim, Config *conf) {
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
     // TODO reuse this so that it wouldn't be needed to malloc and free and copy everytime
-    Config *d_C;
-    CHECK(cudaMalloc(&d_C, sizeof(Config)));
+    // Config *d_C;
+    // CHECK(cudaMalloc(&d_C, sizeof(Config)));
 
     // TODO: probably can be optimized that in simulation loop not always the cuda memcpy is needed
     // (takes a lot of time)
     // CHECK(cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
-    move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, d_C, sim->NP, sim->rngStates);
+    move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->d_conf, sim->NP, sim->rngStates);
     CHECK_KERNELCALL();
 
     // CHECK(cudaMemcpy(sim->P, sim->d_P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyDeviceToHost));
-    CHECK(cudaFree(d_C));
+    // CHECK(cudaFree(d_C));
 }
 
 __global__ void accumulate_sampling_kernel(
@@ -505,11 +510,13 @@ void accumulate_sampling(Simulation *sim) {
 }
 
 void clearPointers(Simulation *sim) {
+    free(sim->conf);
     free(sim->P);
     free(sim->samples);
     // free(sim->cellCount);
     // free(sim->cellList);
 
+    CHECK(cudaFree(sim->d_conf));
     CHECK(cudaFree(sim->rngStates));
     CHECK(cudaFree(sim->d_P));
     CHECK(cudaFree(sim->d_samples));

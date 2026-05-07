@@ -39,18 +39,18 @@ int main(void) {
 
     config_setup(&conf);
     setup(&sim, &conf);
-    initialize_particles(&sim, &conf);
+    initialize_particles(&sim);
 
     timer_end(&t);
     timer_print(&t, "INITIALIZATION");
     timer_start(&t);
 
     for (int step = 0; step < conf.nSteps; step++) {
-        move_particles(&sim, &conf);
-        apply_boundary_conditions_free_stream(&sim, &conf);
+        move_particles(&sim);
+        apply_boundary_conditions_free_stream(&sim);
         index_particles(&sim);
         
-        sim.totalCollisions += collide_particles(&sim, &conf);
+        sim.totalCollisions += collide_particles(&sim);
 
         if (step >= conf.firstSampleStep && step % conf.samplingPeriod == 0) {
             accumulate_sampling(&sim);
@@ -58,7 +58,7 @@ int main(void) {
 
         if (step % conf.printPeriod == 0) {
             move_neccessary_data_before_printing(&sim);
-            print_global_diagnostics(&sim, &conf, step);
+            print_global_diagnostics(&sim, step);
         }
     }
 
@@ -66,10 +66,10 @@ int main(void) {
     timer_print(&t, "SIMULATION LOOP");
 
     move_neccessary_data_before_printing(&sim);
-    
-    print_global_diagnostics(&sim, &conf, conf.nSteps);
-    write_averaged_macros(&sim, &conf, "fields_avg.dat");
-    write_paraview_files(&sim, &conf, conf.nSteps);
+
+    print_global_diagnostics(&sim, conf.nSteps);
+    write_averaged_macros(&sim, "fields_avg.dat");
+    write_paraview_files(&sim, conf.nSteps);
 
     clearPointers(&sim);
 

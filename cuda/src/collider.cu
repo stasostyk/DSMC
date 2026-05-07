@@ -77,7 +77,7 @@ __global__ void no_time_counter_scheme_kernel(
     atomicAdd(total_collisions, collisions);
 }
 
-int collide_particles(Simulation *sim, Config *conf) {
+int collide_particles(Simulation *sim) {
     double weight = sim->weight;
     double cellVolume = sim->cellVolume;
 
@@ -92,17 +92,17 @@ int collide_particles(Simulation *sim, Config *conf) {
     CHECK(cudaMalloc(&d_total_collisions, sizeof(int)));
     CHECK(cudaMemset(d_total_collisions, 0, sizeof(int)));
 
-    Config *d_conf;
-    CHECK(cudaMalloc(&d_conf, sizeof(Config)));
+    // Config *d_conf;
+    // CHECK(cudaMalloc(&d_conf, sizeof(Config)));
 
     // CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
     // CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
     // CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(d_conf, conf, sizeof(Config), cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(d_conf, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
     no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
         d_total_collisions, sim->d_P, sim->d_cellCount, sim->d_cellList,
-        weight, cellVolume, d_conf, sim->rngStates
+        weight, cellVolume, sim->d_conf, sim->rngStates
     );
     CHECK_KERNELCALL();
 
@@ -114,7 +114,7 @@ int collide_particles(Simulation *sim, Config *conf) {
     // CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
     // CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
 
-    CHECK(cudaFree(d_conf));
+    // CHECK(cudaFree(d_conf));
 
     return totalCollisions;
 }
