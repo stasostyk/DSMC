@@ -24,8 +24,6 @@ void setup(Simulation *sim, Config *conf) {
 
     sim->P = (Particle *)malloc(PARTICLES_SZ);
     sim->samples = (Cell *)malloc(SAMPLES_SZ);
-    // sim->cellCount = (int *)malloc(CELL_COUNT_SZ);
-    // sim->cellList = (int *)malloc(CELL_LIST_SZ);
 
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
     CHECK(cudaMalloc(&sim->d_P, PARTICLES_SZ));
@@ -39,7 +37,6 @@ void setup(Simulation *sim, Config *conf) {
 
     // TODO: most of the setup can be moved to constexpr??
 
-    // memset(sim->samples, 0, sizeof(sim->samples));
     cudaMemset(sim->d_samples, 0, SAMPLES_SZ);
 
     sim->dx = conf->Lx / NX;
@@ -114,10 +111,6 @@ __global__ void bin_particles_kernel(
 }
 
 void index_particles(Simulation *sim) {
-    // CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
-
     dim3 threadsPerBlock(8, 8, 8);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
@@ -126,10 +119,9 @@ void index_particles(Simulation *sim) {
     );
 
     // TODO use cuda_memset instead
+    // TODO maybe this can be called from a different stream?
     reset_cell_count_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_cellCount);
     CHECK_KERNELCALL();
-
-    CHECK(cudaDeviceSynchronize());
 
     int thr = 128;
     dim3 threadsPerBlock2(thr, 1, 1);
@@ -139,10 +131,6 @@ void index_particles(Simulation *sim) {
         sim->dx, sim->dy, sim->dz
     );
     CHECK_KERNELCALL();
-
-    // CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
-    // CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
-    // CHECK(cudaMemcpy(sim->P, sim->d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
 }
 
 __global__ void generate_particles_in_rect_kernel(
@@ -223,24 +211,12 @@ void generate_particles_in_rect(
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((Nnew + threads - 1) / threads, 1, 1);
 
-    // Config *d_C;
-    // CHECK(cudaMalloc(&d_C, sizeof(Config)));
-
-    // TODO: probably can be optimized that in simulation loop not always the cuda memcpy is needed
-    // (takes a lot of time)
-    // CHECK(cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
-
     generate_particles_in_rect_kernel<<<blocksPerGrid, threadsPerBlock>>>(
         sim->d_P, sim->d_conf, sim->NP, Nnew, 
         x1, x2, y1, y2, z1, z2, ux, uy, uz, 
         sim->conf->dt, Tgas, moveFlag, sim->rngStates
     );
     CHECK_KERNELCALL();
-
-    // TODO copying is probably only required for sim->NP particles
-    // CHECK(cudaMemcpy(sim->P, sim->d_P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyDeviceToHost));
-    // CHECK(cudaFree(d_C));
 
     sim->NP += Nnew;
 }
@@ -288,17 +264,11 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    // Config *d_C;
-    // CHECK(cudaMalloc(&d_C, sizeof(Config)));
-
     int *d_new_NP;
     Particle *d_new_P;
     CHECK(cudaMalloc(&d_new_NP, sizeof(int)));
     CHECK(cudaMalloc(&d_new_P, sim->NP * sizeof(Particle)));
     CHECK(cudaMemset(d_new_NP, 0, sizeof(int)));
-
-    // CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
 
     filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
         sim->d_conf, sim->d_P, d_new_P, sim->NP, d_new_NP
@@ -309,12 +279,10 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     CHECK(cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
     sim->NP = host_new_NP;
     
-    // CHECK(cudaMemcpy(sim->P, d_new_P, sim->NP * sizeof(Particle), cudaMemcpyDeviceToHost));
     CHECK(cudaMemcpy(sim->d_P, d_new_P, sim->NP * sizeof(Particle), cudaMemcpyDeviceToDevice));
 
     CHECK(cudaFree(d_new_NP));
     CHECK(cudaFree(d_new_P));
-    // CHECK(cudaFree(d_C));
 }
 
 __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandState *rngStates) {
@@ -440,20 +408,8 @@ void move_particles(Simulation *sim) {
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    // TODO reuse this so that it wouldn't be needed to malloc and free and copy everytime
-    // Config *d_C;
-    // CHECK(cudaMalloc(&d_C, sizeof(Config)));
-
-    // TODO: probably can be optimized that in simulation loop not always the cuda memcpy is needed
-    // (takes a lot of time)
-    // CHECK(cudaMemcpy(sim->d_P, sim->P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(d_C, conf, sizeof(Config), cudaMemcpyHostToDevice));
-
     move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->d_conf, sim->NP, sim->rngStates);
     CHECK_KERNELCALL();
-
-    // CHECK(cudaMemcpy(sim->P, sim->d_P, MAX_PARTICLES * sizeof(Particle), cudaMemcpyDeviceToHost));
-    // CHECK(cudaFree(d_C));
 }
 
 __global__ void accumulate_sampling_kernel(
@@ -487,11 +443,6 @@ __global__ void accumulate_sampling_kernel(
 void accumulate_sampling(Simulation *sim) {
     sim->sampleSteps++;
 
-    // CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(sim->d_samples, sim->samples, SAMPLES_SZ, cudaMemcpyHostToDevice));
-
     dim3 threadsPerBlock(8, 8, 8);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
@@ -503,19 +454,12 @@ void accumulate_sampling(Simulation *sim) {
         sim->d_cellCount, sim->d_cellList, sim->d_samples, sim->d_P
     );
     CHECK_KERNELCALL();
-
-    // CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
-    // CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
-    // CHECK(cudaMemcpy(sim->P, sim->d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
-    // CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
 }
 
 void clearPointers(Simulation *sim) {
     free(sim->conf);
     free(sim->P);
     free(sim->samples);
-    // free(sim->cellCount);
-    // free(sim->cellList);
 
     CHECK(cudaFree(sim->d_conf));
     CHECK(cudaFree(sim->rngStates));

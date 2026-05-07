@@ -92,14 +92,6 @@ int collide_particles(Simulation *sim) {
     CHECK(cudaMalloc(&d_total_collisions, sizeof(int)));
     CHECK(cudaMemset(d_total_collisions, 0, sizeof(int)));
 
-    // Config *d_conf;
-    // CHECK(cudaMalloc(&d_conf, sizeof(Config)));
-
-    // CHECK(cudaMemcpy(sim->d_P, sim->P, PARTICLES_SZ, cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(sim->d_cellCount, sim->cellCount, CELL_COUNT_SZ, cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(sim->d_cellList, sim->cellList, CELL_LIST_SZ, cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(d_conf, conf, sizeof(Config), cudaMemcpyHostToDevice));
-
     no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
         d_total_collisions, sim->d_P, sim->d_cellCount, sim->d_cellList,
         weight, cellVolume, sim->d_conf, sim->rngStates
@@ -109,12 +101,6 @@ int collide_particles(Simulation *sim) {
     int totalCollisions;
     CHECK(cudaMemcpy(&totalCollisions, d_total_collisions, sizeof(int), cudaMemcpyDeviceToHost));
     CHECK(cudaFree(d_total_collisions));
-
-    // CHECK(cudaMemcpy(sim->P, sim->d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
-    // CHECK(cudaMemcpy(sim->cellCount, sim->d_cellCount, CELL_COUNT_SZ, cudaMemcpyDeviceToHost));
-    // CHECK(cudaMemcpy(sim->cellList, sim->d_cellList, CELL_LIST_SZ, cudaMemcpyDeviceToHost));
-
-    // CHECK(cudaFree(d_conf));
 
     return totalCollisions;
 }
