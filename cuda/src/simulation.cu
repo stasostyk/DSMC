@@ -236,9 +236,9 @@ __global__ void filter_particles_out_of_bounds(
     if (i >= NP) return;
 
     // check if particle valid
-    if (P[i].x >= 0.0 && P[i].x < conf.Lx &&
-        P[i].y >= 0.0 && P[i].y < conf.Ly &&
-        P[i].z >= 0.0 && P[i].z < conf.Lz
+    if (P[i].x >= 0.0 && P[i].x < d_conf.Lx &&
+        P[i].y >= 0.0 && P[i].y < d_conf.Ly &&
+        P[i].z >= 0.0 && P[i].z < d_conf.Lz
     ) {
         int pos = atomicAdd(new_NP, 1);
         P_out[pos] = P[i];
