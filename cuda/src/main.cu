@@ -7,7 +7,6 @@
 #include "../include/simulation.h"
 #include "../include/io_utils.h"
 #include "../include/timer.h"
-#include "../include/cuda_tst.h"
 #include "../include/cuda_utils.h"
 
 void move_neccessary_data_before_printing(Simulation *sim) {
