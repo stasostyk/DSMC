@@ -1,6 +1,8 @@
 #ifndef DSMC_CONFIG_H
 #define DSMC_CONFIG_H
 
+#include <cuda_runtime.h>
+
 #define MAX_PARTICLES 500000
 #define MAX_PARTICLES_PER_CELL 2000
 #define NX 10
@@ -71,6 +73,8 @@ typedef struct {
     double sigmaRef;
     double CrRef;
 } Config;
+
+extern __constant__ Config d_conf;
 
 void config_setup(Config *config);
 

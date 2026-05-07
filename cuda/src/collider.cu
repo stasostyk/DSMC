@@ -26,7 +26,6 @@ void elastic_collision(Particle *p1, Particle *p2, double Cr, curandState *rngSt
 __global__ void no_time_counter_scheme_kernel(
     int *total_collisions, Particle *P, int *cellCount, int *cellList,
     double weight, double cellVolume,
-    Config *conf,
     curandState *rngStates
 ) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
@@ -43,8 +42,8 @@ __global__ void no_time_counter_scheme_kernel(
 
     // TODO these prob can be moved to constant memory or #define
     // estimate number of collisions
-    double majorant = 9.0 * conf->sigmaRef * sqrt(conf->KB * conf->TFree / conf->moleculeMass);
-    double estimatedCollidingPairs = 0.5 * NPC * (NPC - 1) * weight * majorant * conf->dt / cellVolume;
+    double majorant = 9.0 * d_conf.sigmaRef * sqrt(d_conf.KB * d_conf.TFree / d_conf.moleculeMass);
+    double estimatedCollidingPairs = 0.5 * NPC * (NPC - 1) * weight * majorant * d_conf.dt / cellVolume;
     int expectedCollodingPairs = (int)estimatedCollidingPairs;
     if (curand_uniform(&rngStates[idx]) < estimatedCollidingPairs - expectedCollodingPairs) expectedCollodingPairs++;
 
@@ -66,7 +65,7 @@ __global__ void no_time_counter_scheme_kernel(
                                     + relativeVel[1] * relativeVel[1]
                                     + relativeVel[2] * relativeVel[2]);
 
-        double collisionProb = conf->sigmaRef * pow(conf->CrRef / relativeSpeed, 2.0*conf->omega - 1.0) * relativeSpeed / majorant;
+        double collisionProb = d_conf.sigmaRef * pow(d_conf.CrRef / relativeSpeed, 2.0*d_conf.omega - 1.0) * relativeSpeed / majorant;
         if (curand_uniform(&rngStates[idx]) < collisionProb) {
             elastic_collision( &P[i], &P[j], relativeSpeed, &rngStates[idx] );
             collisions++;
@@ -94,7 +93,7 @@ int collide_particles(Simulation *sim) {
 
     no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
         d_total_collisions, sim->d_P, sim->d_cellCount, sim->d_cellList,
-        weight, cellVolume, sim->d_conf, sim->rngStates
+        weight, cellVolume, sim->rngStates
     );
     CHECK_KERNELCALL();
 

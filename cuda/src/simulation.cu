@@ -17,10 +17,9 @@ __global__ void init_rng_kernel(curandState *states, unsigned long seed) {
 
 void setup(Simulation *sim, Config *conf) {
     sim->conf = (Config *) malloc(sizeof(Config));
-    CHECK(cudaMalloc(&sim->d_conf, sizeof(Config)));
 
     memcpy(sim->conf, conf, sizeof(Config));
-    CHECK(cudaMemcpy(sim->d_conf, conf, sizeof(Config), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpyToSymbol(d_conf, conf, sizeof(Config)));
 
     sim->P = (Particle *)malloc(PARTICLES_SZ);
     sim->samples = (Cell *)malloc(SAMPLES_SZ);
@@ -135,7 +134,6 @@ void index_particles(Simulation *sim) {
 
 __global__ void generate_particles_in_rect_kernel(
     Particle *P,
-    Config *conf,
     int start,
     int Nnew,
     double x1, double x2, 
@@ -163,9 +161,9 @@ __global__ void generate_particles_in_rect_kernel(
     P[idx].z = z1 + (z2 - z1) * rz;
 
     // TODO compute the sqrt in CPU, and pass it to GPU as param
-    double vx = curand_normal(&rngStates[idx]) * sqrt(conf->KB * Tgas / conf->moleculeMass) + ux;
-    double vy = curand_normal(&rngStates[idx]) * sqrt(conf->KB * Tgas / conf->moleculeMass) + uy;
-    double vz = curand_normal(&rngStates[idx]) * sqrt(conf->KB * Tgas / conf->moleculeMass) + uz;
+    double vx = curand_normal(&rngStates[idx]) * sqrt(d_conf.KB * Tgas / d_conf.moleculeMass) + ux;
+    double vy = curand_normal(&rngStates[idx]) * sqrt(d_conf.KB * Tgas / d_conf.moleculeMass) + uy;
+    double vz = curand_normal(&rngStates[idx]) * sqrt(d_conf.KB * Tgas / d_conf.moleculeMass) + uz;
 
     P[idx].vx = vx;
     P[idx].vy = vy;
@@ -212,7 +210,7 @@ void generate_particles_in_rect(
     dim3 blocksPerGrid((Nnew + threads - 1) / threads, 1, 1);
 
     generate_particles_in_rect_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_P, sim->d_conf, sim->NP, Nnew, 
+        sim->d_P, sim->NP, Nnew, 
         x1, x2, y1, y2, z1, z2, ux, uy, uz, 
         sim->conf->dt, Tgas, moveFlag, sim->rngStates
     );
@@ -227,7 +225,7 @@ void initialize_particles(Simulation *sim) {
 }
 
 __global__ void filter_particles_out_of_bounds(
-    Config *conf, Particle *P, Particle *P_out, int NP, int *new_NP
+    Particle *P, Particle *P_out, int NP, int *new_NP
 ) {
     // TODO this can be possibly optimized:
     // 1st kernel: mark the particles true/false if they need to be removed
@@ -238,9 +236,9 @@ __global__ void filter_particles_out_of_bounds(
     if (i >= NP) return;
 
     // check if particle valid
-    if (P[i].x >= 0.0 && P[i].x < conf->Lx &&
-        P[i].y >= 0.0 && P[i].y < conf->Ly &&
-        P[i].z >= 0.0 && P[i].z < conf->Lz
+    if (P[i].x >= 0.0 && P[i].x < conf.Lx &&
+        P[i].y >= 0.0 && P[i].y < conf.Ly &&
+        P[i].z >= 0.0 && P[i].z < conf.Lz
     ) {
         int pos = atomicAdd(new_NP, 1);
         P_out[pos] = P[i];
@@ -271,7 +269,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     CHECK(cudaMemset(d_new_NP, 0, sizeof(int)));
 
     filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_conf, sim->d_P, d_new_P, sim->NP, d_new_NP
+        sim->d_P, d_new_P, sim->NP, d_new_NP
     );
     CHECK_KERNELCALL();
 
@@ -285,7 +283,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     CHECK(cudaFree(d_new_P));
 }
 
-__global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandState *rngStates) {
+__global__ void move_particles_kernel(Particle *P, int NP, curandState *rngStates) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
@@ -294,18 +292,18 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
     double X0 = P[i].x;
     double Y0 = P[i].y;
     double Z0 = P[i].z;
-    P[i].x += conf->dt * P[i].vx;
-    P[i].y += conf->dt * P[i].vy;
-    P[i].z += conf->dt * P[i].vz;
+    P[i].x += d_conf.dt * P[i].vx;
+    P[i].y += d_conf.dt * P[i].vy;
+    P[i].z += d_conf.dt * P[i].vz;
 
 
     #ifdef WING_CASE
-    double dt = conf->dt;
-    double moleculeMass = conf->moleculeMass;
-    double Tw = conf->Tw;
-    double WingX = conf->WingX;
-    double WingY = conf->WingY;
-    double WingLength = conf->WingLength;
+    double dt = d_conf.dt;
+    double moleculeMass = d_conf.moleculeMass;
+    double Tw = d_conf.Tw;
+    double WingX = d_conf.WingX;
+    double WingY = d_conf.WingY;
+    double WingLength = d_conf.WingLength;
 
     if ( ( Y0 - WingY ) * ( P[i].y - WingY ) < 0.0 ) {
         // Linear interpolation to point Y = WingY
@@ -320,7 +318,7 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
             diffuse_scattering_y_device(
                 &(P[i].vx), &(P[i].vy), &(P[i].vz), 
                 moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
-                conf->KB,
+                d_conf.KB,
                 &rngStates[i]
             );
             // Move the reflected molecule
@@ -341,10 +339,10 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
         double dz = z1 - z0;
 
         // Sphere center
-        double cx = conf->ballCenterX;
-        double cy = conf->ballCenterY;
-        double cz = conf->ballCenterZ;
-        double ballRadius = conf->ballRadius;
+        double cx = d_conf.ballCenterX;
+        double cy = d_conf.ballCenterY;
+        double cz = d_conf.ballCenterZ;
+        double ballRadius = d_conf.ballRadius;
 
         // Shifted initial position
         double rx = x0 - cx;
@@ -377,7 +375,7 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
                 double Zw = z0 + t_hit * dz;
 
                 // Remaining time after collision
-                double Dt1 = conf->dt * (1.0 - t_hit);
+                double Dt1 = d_conf.dt * (1.0 - t_hit);
 
                 // Surface normal (outward)
                 double nx = (Xw - cx) / ballRadius;
@@ -386,8 +384,8 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
 
                 // Diffuse reflection aligned with normal
                 diffuse_scattering_device(&(P[i].vx), &(P[i].vy), &(P[i].vz),
-                                conf->moleculeMass, conf->Tb,
-                                nx, ny, nz, conf->KB,
+                                d_conf.moleculeMass, d_conf.Tb,
+                                nx, ny, nz, d_conf.KB,
                                 &rngStates[i]
                             );
 
@@ -408,7 +406,7 @@ void move_particles(Simulation *sim) {
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->d_conf, sim->NP, sim->rngStates);
+    move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->NP, sim->rngStates);
     CHECK_KERNELCALL();
 }
 
@@ -461,7 +459,6 @@ void clearPointers(Simulation *sim) {
     free(sim->P);
     free(sim->samples);
 
-    CHECK(cudaFree(sim->d_conf));
     CHECK(cudaFree(sim->rngStates));
     CHECK(cudaFree(sim->d_P));
     CHECK(cudaFree(sim->d_samples));

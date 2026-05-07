@@ -1,5 +1,8 @@
 #include <math.h>
+#include <cuda_runtime.h>
 #include "../include/config.h"
+
+__constant__ Config d_conf;
 
 void config_setup(Config *config) {
     config->KB = 1.380649e-23; // Boltzmann constant in J/K
