@@ -24,9 +24,7 @@ void elastic_collision(Particle *p1, Particle *p2, double Cr, curandState *rngSt
 }
 
 __global__ void no_time_counter_scheme_kernel(
-    int *total_collisions, Particle *P, int *cellCount, int *cellList,
-    double weight, double cellVolume,
-    curandState *rngStates
+    int *total_collisions, Particle *P, int *cellCount, int *cellList, curandState *rngStates
 ) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     int l = blockIdx.y * blockDim.y + threadIdx.y;
@@ -37,6 +35,10 @@ __global__ void no_time_counter_scheme_kernel(
 
     int NPC = cellCount[IDX_CELL(k, l, m)];
     if (NPC < 2) return;
+
+    
+    double weight = d_conf.weight;
+    double cellVolume = d_conf.cellVolume;
 
     int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
 
@@ -76,9 +78,6 @@ __global__ void no_time_counter_scheme_kernel(
 }
 
 int collide_particles(Simulation *sim) {
-    double weight = sim->weight;
-    double cellVolume = sim->cellVolume;
-
     dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
@@ -91,8 +90,7 @@ int collide_particles(Simulation *sim) {
     CHECK(cudaMemset(d_total_collisions, 0, sizeof(int)));
 
     no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        d_total_collisions, sim->d_P, sim->d_cellCount, sim->d_cellList,
-        weight, cellVolume, sim->rngStates
+        d_total_collisions, sim->d_P, sim->d_cellCount, sim->d_cellList, sim->rngStates
     );
     CHECK_KERNELCALL();
 
