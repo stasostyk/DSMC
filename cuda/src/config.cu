@@ -83,9 +83,9 @@ void config_setup(Config *config) {
 
     // precompute multiplier used in no time collision scheme
     double majorant = 9.0 * config->sigmaRef * sqrt(config->KB * config->TFree / config->moleculeMass);
-    config->ntcs_collisionProbMultiplier = pow(config->CrRef, config->ntcs_collisionProbExponent) * config->sigmaRef / majorant;
     config->ntcs_collidingPairsMultiplier = 0.5 * config->weight * majorant * config->dt / config->cellVolume;
     config->ntcs_collisionProbExponent = 2.0*config->omega - 1.0;
+    config->ntcs_collisionProbMultiplier = pow(config->CrRef, config->ntcs_collisionProbExponent) * config->sigmaRef / majorant;
 
     config->generation_derivatedMultiplier = sqrt(config->KB * config->TFree / config->moleculeMass);
 }
