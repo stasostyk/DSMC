@@ -40,7 +40,6 @@ __global__ void no_time_counter_scheme_kernel(
 
     int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
 
-    // TODO these prob can be moved to constant memory or #define
     // estimate number of collisions
     double majorant = 9.0 * d_conf.sigmaRef * sqrt(d_conf.KB * d_conf.TFree / d_conf.moleculeMass);
     double estimatedCollidingPairs = 0.5 * NPC * (NPC - 1) * weight * majorant * d_conf.dt / cellVolume;

@@ -58,9 +58,28 @@ void config_setup(Config *config) {
     // derived parameters
     config->moleculeMass = config->molarMass / config->NA;
 
+    config->dx = config->Lx / NX;
+    config->dy = config->Ly / NY;
+    config->dz = config->Lz / NZ;
+    config->cellVolume = config->dx * config->dy * config->dz;
+
+    #ifdef WING_CASE
+        double angleOfAttack = config->angleOfAttack;
+    #elif defined(BALL_CASE)
+        double angleOfAttack = 0.;
+    #endif
+    config->NFree = config->PFree / ( config->KB * config->TFree );
+    config->UFree = config->MaFree * sqrt ( ( 5.0 / 3.0 ) * config->KB * config->TFree / config->moleculeMass );
+    config->UxFree = config->UFree * cos ( M_PI * angleOfAttack / 180.0 );
+    config->UyFree = - config->UFree * sin ( M_PI * angleOfAttack / 180.0 );
+    config->UzFree = 0.0;
+
+    config->weight = config->NFree * config->cellVolume / config->particlesPerCellTarget;
+
     // derived, used in collider
     config->sigmaRef = M_PI * config->dRef * config->dRef;
     config->CrRef = sqrt(4.0 * config->KB * config->TFree / config->moleculeMass);
+
 }
 
 

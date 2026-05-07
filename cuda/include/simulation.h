@@ -32,14 +32,6 @@ typedef struct {
     int sampleSteps;
     int NP;
     long long totalCollisions;
-
-    // derived quantities
-    double dx, dy, dz;
-    double cellVolume;
-    double weight;
-    double NFree;
-    double UFree;
-    double UxFree, UyFree, UzFree;
 } Simulation;
 
 void setup(Simulation *sim, Config *conf);

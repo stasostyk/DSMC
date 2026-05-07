@@ -68,10 +68,17 @@ typedef struct {
 
     // derived parameters
     double moleculeMass;
+    double dx, dy, dz;
+    double cellVolume;
+    double weight;
+    double NFree;
+    double UFree;
+    double UxFree, UyFree, UzFree;
 
     // derived, used in collider
     double sigmaRef;
     double CrRef;
+    // double ntcs_estimatedCollidingPairs; // used in no time collision scheme
 } Config;
 
 extern __constant__ Config d_conf;
