@@ -81,7 +81,7 @@ int collide_particles(Simulation *sim) {
     double weight = sim->weight;
     double cellVolume = sim->cellVolume;
 
-    dim3 threadsPerBlock(8, 8, 8);
+    dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
