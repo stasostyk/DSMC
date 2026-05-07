@@ -85,6 +85,8 @@ void config_setup(Config *config) {
     config->ntcs_invMajorantTimesSigmaRef = config->sigmaRef / majorant;
     config->ntcs_collidingPairsMultiplier = 0.5 * config->weight * majorant * config->dt / config->cellVolume;
     config->ntcs_collisionProbExponent = 2.0*config->omega - 1.0;
+
+    config->generation_derivatedMultiplier = sqrt(config->KB * config->TFree / config->moleculeMass);
 }
 
 

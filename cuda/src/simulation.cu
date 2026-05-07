@@ -125,7 +125,6 @@ __global__ void generate_particles_in_rect_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= Nnew) return;
 
-    double Tgas = d_conf.TFree;
     double ux = d_conf.UxFree;
     double uy = d_conf.UyFree;
     double uz = d_conf.UzFree; 
@@ -144,9 +143,9 @@ __global__ void generate_particles_in_rect_kernel(
     P[idx].z = z1 + (z2 - z1) * rz;
 
     // TODO compute the sqrt in CPU, and pass it to GPU as param
-    double vx = curand_normal(&rngStates[idx]) * sqrt(d_conf.KB * Tgas / d_conf.moleculeMass) + ux;
-    double vy = curand_normal(&rngStates[idx]) * sqrt(d_conf.KB * Tgas / d_conf.moleculeMass) + uy;
-    double vz = curand_normal(&rngStates[idx]) * sqrt(d_conf.KB * Tgas / d_conf.moleculeMass) + uz;
+    double vx = curand_normal(&rngStates[idx]) * d_conf.generation_derivatedMultiplier + ux;
+    double vy = curand_normal(&rngStates[idx]) * d_conf.generation_derivatedMultiplier + uy;
+    double vz = curand_normal(&rngStates[idx]) * d_conf.generation_derivatedMultiplier + uz;
 
     P[idx].vx = vx;
     P[idx].vy = vy;

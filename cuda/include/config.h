@@ -81,6 +81,9 @@ typedef struct {
     double ntcs_invMajorantTimesSigmaRef; // used in no time collision scheme
     double ntcs_collidingPairsMultiplier; // used in no time collision scheme
     double ntcs_collisionProbExponent;    // used in no time collision scheme
+
+    // derived, used in simulation
+    double generation_derivatedMultiplier;
 } Config;
 
 extern __constant__ Config d_conf;

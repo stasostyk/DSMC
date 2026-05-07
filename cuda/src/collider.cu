@@ -36,22 +36,18 @@ __global__ void no_time_counter_scheme_kernel(
     int NPC = cellCount[IDX_CELL(k, l, m)];
     if (NPC < 2) return;
 
-    
-    double weight = d_conf.weight;
-    double cellVolume = d_conf.cellVolume;
-
     int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
 
     // estimate number of collisions
     double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
-    int expectedCollodingPairs = (int)estimatedCollidingPairs;
-    if (curand_uniform(&rngStates[idx]) < estimatedCollidingPairs - expectedCollodingPairs) expectedCollodingPairs++;
+    int expectedCollidingPairs = (int)estimatedCollidingPairs;
+    if (curand_uniform(&rngStates[idx]) < estimatedCollidingPairs - expectedCollidingPairs) expectedCollidingPairs++;
 
     // monte carlo accept/reject pairs and collide
     int collisions = 0;
     int i, j; // two particles to collide
 
-    for (int k = 0; k < expectedCollodingPairs; k++) {
+    for (int k = 0; k < expectedCollidingPairs; k++) {
         i = (int)(curand_uniform(&rngStates[idx]) * NPC);
         do {
             j = (int)(curand_uniform(&rngStates[idx]) * NPC);
