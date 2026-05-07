@@ -68,7 +68,7 @@ void write_averaged_macros(Simulation *sim, const char *filename) {
                 double meanU2 = ux * ux + uy * uy + uz * uz;
 
                 double n = sim->weight * avgNP / sim->cellVolume;
-                double T = sim->conf->moleculeMass * (meanV2 - meanU2) / (3.0 * conf->KB);
+                double T = sim->conf->moleculeMass * (meanV2 - meanU2) / (3.0 * sim->conf->KB);
 
                 fprintf(fp, "%e %e %e %e %e %e %e %e %e\n",
                         xc, yc, zc, n, ux, uy, uz, T, avgNP);
@@ -145,7 +145,7 @@ void write_vti(Simulation *sim, const char *filename) {
                     double meanV2 = sim->samples[IDX_CELL(k, l, m)].countV2 / count;
                     double meanU2 = ux*ux + uy*uy + uz*uz;
 
-                    T = sim->conf->moleculeMass * (meanV2 - meanU2) / (3.0 * conf->KB);
+                    T = sim->conf->moleculeMass * (meanV2 - meanU2) / (3.0 * sim->conf->KB);
                 }
 
                 fprintf(fp, "%e ", T);
