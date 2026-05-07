@@ -15,7 +15,6 @@ set(SOURCES
     src/simulation.cu
     src/io_utils.cu
     src/timer.cu
-    src/cuda_tst.cu
 )
 
 # Executable for Wing case
