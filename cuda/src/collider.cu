@@ -43,8 +43,7 @@ __global__ void no_time_counter_scheme_kernel(
     int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
 
     // estimate number of collisions
-    double majorant = 9.0 * d_conf.sigmaRef * sqrt(d_conf.KB * d_conf.TFree / d_conf.moleculeMass);
-    double estimatedCollidingPairs = 0.5 * NPC * (NPC - 1) * weight * majorant * d_conf.dt / cellVolume;
+    double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
     int expectedCollodingPairs = (int)estimatedCollidingPairs;
     if (curand_uniform(&rngStates[idx]) < estimatedCollidingPairs - expectedCollodingPairs) expectedCollodingPairs++;
 
@@ -66,7 +65,7 @@ __global__ void no_time_counter_scheme_kernel(
                                     + relativeVel[1] * relativeVel[1]
                                     + relativeVel[2] * relativeVel[2]);
 
-        double collisionProb = d_conf.sigmaRef * pow(d_conf.CrRef / relativeSpeed, 2.0*d_conf.omega - 1.0) * relativeSpeed / majorant;
+        double collisionProb = pow(d_conf.CrRef / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed * d_conf.ntcs_invMajorantTimesSigmaRef;
         if (curand_uniform(&rngStates[idx]) < collisionProb) {
             elastic_collision( &P[i], &P[j], relativeSpeed, &rngStates[idx] );
             collisions++;

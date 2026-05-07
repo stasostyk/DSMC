@@ -80,6 +80,11 @@ void config_setup(Config *config) {
     config->sigmaRef = M_PI * config->dRef * config->dRef;
     config->CrRef = sqrt(4.0 * config->KB * config->TFree / config->moleculeMass);
 
+    // precompute multiplier used in no time collision scheme
+    double majorant = 9.0 * config->sigmaRef * sqrt(config->KB * config->TFree / config->moleculeMass);
+    config->ntcs_invMajorantTimesSigmaRef = config->sigmaRef / majorant;
+    config->ntcs_collidingPairsMultiplier = 0.5 * config->weight * majorant * config->dt / config->cellVolume;
+    config->ntcs_collisionProbExponent = 2.0*config->omega - 1.0;
 }
 
 
