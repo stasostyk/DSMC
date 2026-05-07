@@ -435,7 +435,7 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
 
 }
 
-void move_particles(Simulation *sim, Config *conf) {
+void move_particles(Simulation *sim) {
     int threads = 256;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
