@@ -55,7 +55,7 @@ int main(void) {
             accumulate_sampling(&sim);
         }
 
-        if (step % conf.printPeriod == 0) {
+        if (conf.printPeriod > 0 && step % conf.printPeriod == 0) {
             move_neccessary_data_before_printing(&sim);
             print_global_diagnostics(&sim, step);
         }
