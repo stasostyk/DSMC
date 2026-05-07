@@ -247,7 +247,7 @@ void generate_particles_in_rect(
 
 void initialize_particles(Simulation *sim) {
     sim->NP = 0;
-    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 0);
+    generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, sim->conf->TFree, 0);
 }
 
 __global__ void filter_particles_out_of_bounds(
@@ -276,6 +276,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     // TODO maybe the kernels to generate particles could be started even before
     //      the previous task (move_particles) is finished because generation
     //      could be done in a way so that it doesnt overlap? (note: use different streams)
+    Config *conf = sim->conf;
     generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
     generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
     generate_particles_in_rect(sim, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, conf->TFree, 1);
