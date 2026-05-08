@@ -89,7 +89,7 @@ __global__ void bin_particles_kernel(
 }
 
 void index_particles(Simulation *sim) {
-    dim3 threadsPerBlock(8, 8, 8);
+    dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
@@ -101,7 +101,7 @@ void index_particles(Simulation *sim) {
     reset_cell_count_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_cellCount);
     CHECK_KERNELCALL();
 
-    int thr = 128;
+    int thr = 64;
     dim3 threadsPerBlock2(thr, 1, 1);
     dim3 blocksPerGrid2((sim->NP + thr - 1) / thr, 1, 1);
     bin_particles_kernel<<<blocksPerGrid2, threadsPerBlock2>>>(
@@ -183,7 +183,7 @@ void generate_particles_in_rect(
         exit(1);
     }
 
-    int threads = 256;
+    int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((Nnew + threads - 1) / threads, 1, 1);
 

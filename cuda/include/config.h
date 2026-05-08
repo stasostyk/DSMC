@@ -9,7 +9,6 @@
 #define NY 30
 #define NZ 30
 
-// TODO calculate once these constants
 #define PARTICLES_SZ (MAX_PARTICLES * sizeof(Particle))
 #define SAMPLES_SZ (NX * NY * NZ * sizeof(Cell))
 #define CELL_COUNT_SZ (NX * NY * NZ * sizeof(int))
