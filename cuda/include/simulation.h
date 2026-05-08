@@ -11,8 +11,9 @@
 #define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + q)
 
 typedef struct {
-    curandState *rngStates; // for using randomness in GPU
-                            // allocated in device memory (GPU)
+    // for using randomness in GPU
+    // allocated in device memory (GPU)
+    curandStatePhilox4_32_10_t *rngStates; 
 
     Config *conf;   // allocated in host (CPU)
 

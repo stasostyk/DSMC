@@ -9,7 +9,7 @@
 #include "../include/math_utils.h"
 #include "../include/cuda_utils.h"
 
-__global__ void init_rng_kernel(curandState *states, unsigned long seed) {
+__global__ void init_rng_kernel(curandStatePhilox4_32_10_t *states, unsigned long seed) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= MAX_PARTICLES) return;
     curand_init(seed, i, 0, &states[i]);
@@ -120,7 +120,7 @@ __global__ void generate_particles_in_rect_kernel(
     double y1, double y2,
     double z1, double z2,
     int moveFlag,
-    curandState *rngStates
+    curandStatePhilox4_32_10_t *rngStates
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= Nnew) return;
@@ -132,7 +132,7 @@ __global__ void generate_particles_in_rect_kernel(
 
     int idx = start + i;
 
-    curandState rngState = rngStates[idx];
+    curandStatePhilox4_32_10_t rngState = rngStates[idx];
 
     double rx = curand_uniform(&rngState);
     double ry = curand_uniform(&rngState);
@@ -264,7 +264,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     CHECK(cudaFree(d_new_P));
 }
 
-__global__ void move_particles_kernel(Particle *P, int NP, curandState *rngStates) {
+__global__ void move_particles_kernel(Particle *P, int NP, curandStatePhilox4_32_10_t *rngStates) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
@@ -277,7 +277,7 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngState
     P[i].y += d_conf.dt * P[i].vy;
     P[i].z += d_conf.dt * P[i].vz;
 
-    curandState rngState = rngStates[i];
+    curandStatePhilox4_32_10_t rngState = rngStates[i];
 
 
     #ifdef WING_CASE

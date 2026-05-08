@@ -44,7 +44,7 @@ void random_isotropic_vector (double *R)
 }
 
 __device__
-void random_isotropic_vector_device (double *R, curandState *rngState)
+void random_isotropic_vector_device (double *R, curandStatePhilox4_32_10_t *rngState)
 {
     double cosT = 1.0 - 2.0 * curand_uniform(rngState);
     double sinT = sqrt (1.0 - cosT * cosT);

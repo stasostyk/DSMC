@@ -9,7 +9,7 @@
 #include <curand_kernel.h>
 
 __device__
-void elastic_collision(Particle *p1, Particle *p2, double Cr, curandState *rngState) {
+void elastic_collision(Particle *p1, Particle *p2, double Cr, curandStatePhilox4_32_10_t *rngState) {
     double N[3];
     random_isotropic_vector_device(N, rngState);
     Cr *= 0.5;
@@ -24,7 +24,7 @@ void elastic_collision(Particle *p1, Particle *p2, double Cr, curandState *rngSt
 }
 
 __global__ void no_time_counter_scheme_kernel(
-    int *total_collisions, Particle *P, int *cellCount, int *cellList, curandState *rngStates
+    int *total_collisions, Particle *P, int *cellCount, int *cellList, curandStatePhilox4_32_10_t *rngStates
 ) {
     __shared__ int collisionsBlock[64];
 
@@ -41,7 +41,7 @@ __global__ void no_time_counter_scheme_kernel(
 
             int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
 
-            curandState rngState = rngStates[idx];
+            curandStatePhilox4_32_10_t rngState = rngStates[idx];
 
             // estimate number of collisions
             double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
