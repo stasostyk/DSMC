@@ -27,7 +27,7 @@ void diffuse_scattering(
 __device__
 void diffuse_scattering_y_device(
     double *vx, double *vy, double *vz, double m, double T, double Ny, double KB,
-    curandState *rngState
+    curandStatePhilox4_32_10_t *rngState
 );
 
 __device__
@@ -36,7 +36,7 @@ void diffuse_scattering_device(
     double m, double T, 
     double nx, double ny, double nz,
     double KB,
-    curandState *rngState
+    curandStatePhilox4_32_10_t *rngState
 );
 
 __device__
