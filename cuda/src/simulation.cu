@@ -134,19 +134,21 @@ __global__ void generate_particles_in_rect_kernel(
 
     curandStatePhilox4_32_10_t rngState = rngStates[idx];
 
-    double rx = curand_uniform(&rngState);
-    double ry = curand_uniform(&rngState);
-    double rz = curand_uniform(&rngState);
+    double4 randomUniform = curand_uniform4_double(&rngState);
+    double rx = randomUniform.x;
+    double ry = randomUniform.y;
+    double rz = randomUniform.z;
 
     // TODO possibly better to create everything in local variable, and only then store in P?
     P[idx].x = x1 + (x2 - x1) * rx;
     P[idx].y = y1 + (y2 - y1) * ry;
     P[idx].z = z1 + (z2 - z1) * rz;
 
-    // TODO compute the sqrt in CPU, and pass it to GPU as param
-    double vx = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + ux;
-    double vy = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + uy;
-    double vz = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + uz;
+
+    double4 randomNormal = curand_normal4_double(&rngState);
+    double vx = randomNormal.x * d_conf.generation_derivatedMultiplier + ux;
+    double vy = randomNormal.y * d_conf.generation_derivatedMultiplier + uy;
+    double vz = randomNormal.z * d_conf.generation_derivatedMultiplier + uz;
 
     P[idx].vx = vx;
     P[idx].vy = vy;
