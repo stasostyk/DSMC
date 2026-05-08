@@ -8,11 +8,12 @@
 #include "../include/io_utils.h"
 #include "../include/timer.h"
 #include "../include/cuda_utils.h"
+#include "../include/particle.h"
 
 void move_neccessary_data_before_printing(Simulation *sim) {
     // Particle data is mostly stored in and dealt in GPU, 
     // to have the newest version in CPU, it needs to be copied.
-    CHECK(cudaMemcpy(sim->P, sim->d_P, PARTICLES_SZ, cudaMemcpyDeviceToHost));
+    cudaCopyParticleData(&(sim->P), &(sim->d_P), cudaMemcpyDeviceToHost);
     CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
 } 
 

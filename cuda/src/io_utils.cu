@@ -8,9 +8,9 @@ void print_global_diagnostics(Simulation *sim, int step) {
     double sumVx = 0.0, sumVy = 0.0, sumVz = 0.0;
 
     for (int i = 0; i < sim->NP; i++) {
-        sumVx += sim->P[i].vx;
-        sumVy += sim->P[i].vy;
-        sumVz += sim->P[i].vz;
+        sumVx += sim->P.vx[i];
+        sumVy += sim->P.vy[i];
+        sumVz += sim->P.vz[i];
     }
 
     double ux = sumVx / sim->NP;
@@ -19,9 +19,9 @@ void print_global_diagnostics(Simulation *sim, int step) {
 
     double sumC2 = 0.0;
     for (int i = 0; i < sim->NP; i++) {
-        double cx = sim->P[i].vx - ux;
-        double cy = sim->P[i].vy - uy;
-        double cz = sim->P[i].vz - uz;
+        double cx = sim->P.vx[i] - ux;
+        double cy = sim->P.vy[i] - uy;
+        double cz = sim->P.vz[i] - uz;
         sumC2 += cx * cx + cy * cy + cz * cz;
     }
 

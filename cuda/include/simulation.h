@@ -22,8 +22,8 @@ typedef struct {
     // the same particle data on CPU and keep moving data.
     // Particles in CPU are only moved to count and print global diagnostics data.
     // Similar logic applies to samples, cellCount, cellList.
-    Particle *P;   // allocated in host memory (CPU)
-    Particle *d_P; // allocated in device memory (GPU)
+    ParticleData P;   // allocated in host memory (CPU)
+    ParticleData d_P; // allocated in device memory (GPU)
     Cell *samples;    // allocated in host memory (CPU)
     Cell *d_samples;  // allocated in device memory (GPU)
     int *d_cellCount; // allocated in device memory (GPU)
