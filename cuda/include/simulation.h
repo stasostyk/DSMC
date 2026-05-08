@@ -24,6 +24,8 @@ typedef struct {
     // Similar logic applies to samples, cellCount, cellList.
     Particle *P;   // allocated in host memory (CPU)
     Particle *d_P; // allocated in device memory (GPU)
+    Particle *d_new_P; // allocated in device memory(GPU), will be used as temporary storage
+                       // when creating new particles
     Cell *samples;    // allocated in host memory (CPU)
     Cell *d_samples;  // allocated in device memory (GPU)
     int *d_cellCount; // allocated in device memory (GPU)

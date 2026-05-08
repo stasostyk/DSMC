@@ -26,6 +26,7 @@ void setup(Simulation *sim, Config *conf) {
 
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
     CHECK(cudaMalloc(&sim->d_P, PARTICLES_SZ));
+    CHECK(cudaMalloc(&sim->d_new_P, PARTICLES_SZ));
     CHECK(cudaMalloc(&sim->d_samples, SAMPLES_SZ));
     CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));
     CHECK(cudaMalloc(&sim->d_cellList, CELL_LIST_SZ));
@@ -241,13 +242,11 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
     int *d_new_NP;
-    Particle *d_new_P;
     CHECK(cudaMalloc(&d_new_NP, sizeof(int)));
-    CHECK(cudaMalloc(&d_new_P, sim->NP * sizeof(Particle)));
     CHECK(cudaMemset(d_new_NP, 0, sizeof(int)));
 
     filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_P, d_new_P, sim->NP, d_new_NP
+        sim->d_P, sim->d_new_P, sim->NP, d_new_NP
     );
     CHECK_KERNELCALL();
 
@@ -255,10 +254,12 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     CHECK(cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
     sim->NP = host_new_NP;
     
-    CHECK(cudaMemcpy(sim->d_P, d_new_P, sim->NP * sizeof(Particle), cudaMemcpyDeviceToDevice));
+    // swap d_P and d_new_P
+    Particle *tmp = sim->d_P;
+    sim->d_P = sim->d_new_P;
+    sim->d_new_P = tmp;
 
     CHECK(cudaFree(d_new_NP));
-    CHECK(cudaFree(d_new_P));
 }
 
 __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngStates) {
@@ -442,6 +443,7 @@ void clearPointers(Simulation *sim) {
 
     CHECK(cudaFree(sim->rngStates));
     CHECK(cudaFree(sim->d_P));
+    CHECK(cudaFree(sim->d_new_P));
     CHECK(cudaFree(sim->d_samples));
     CHECK(cudaFree(sim->d_cellCount));
     CHECK(cudaFree(sim->d_cellList));
