@@ -43,22 +43,23 @@ __global__ void no_time_counter_scheme_kernel(
 
             curandStatePhilox4_32_10_t rngState = rngStates[idx];
 
-            float4 r = curand_uniform4(&rngState);
-
             // estimate number of collisions
             double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
             int expectedCollidingPairs = (int)estimatedCollidingPairs;
-            if (r.x < estimatedCollidingPairs - expectedCollidingPairs) expectedCollidingPairs++;
+            if (curand_uniform(&rngState) < estimatedCollidingPairs - expectedCollidingPairs) expectedCollidingPairs++;
 
             // monte carlo accept/reject pairs and collide
-            int i, j; // two particles to collide
 
             for (int k = 0; k < expectedCollidingPairs; k++) {
-                i = (int)(r.y * NPC);
-                j = (i + 1 + ((int)(r.z * (NPC - 1)))) % NPC;
+                float4 r = curand_uniform4(&rngState);
+                int i_local = (int)(r.x * NPC);
+                int j_offset = (int)(r.y * (NPC - 1));
+                int j_local = (i_local + 1 + j_offset) % NPC;
 
-                i = IPC[i];
-                j = IPC[j];
+                
+                // two particles to collide
+                int i = IPC[i_local];
+                int j = IPC[j_local];
 
                 double relativeVel[3] = { P[j].vx - P[i].vx, P[j].vy - P[i].vy, P[j].vz - P[i].vz };
                 double relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
@@ -69,7 +70,7 @@ __global__ void no_time_counter_scheme_kernel(
                 // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
                 // But, we assume omega=0.75, which lets us remove pow() in a simple way:
                 double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
-                if (r.w < collisionProb) {
+                if (r.z < collisionProb) {
                     elastic_collision( &P[i], &P[j], relativeSpeed, &rngState );
                     collisions++;
                 }
