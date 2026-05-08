@@ -53,9 +53,10 @@ __global__ void no_time_counter_scheme_kernel(
 
             for (int k = 0; k < expectedCollidingPairs; k++) {
                 i = (int)(curand_uniform(&rngState) * NPC);
-                do {
-                    j = (int)(curand_uniform(&rngState) * NPC);
-                } while (j == i);
+                j = (i + 1 + ((int)(curand_uniform(&rngState)))) % NPC;
+                // do {
+                //     j = (int)(curand_uniform(&rngState) * NPC);
+                // } while (j == i);
 
                 i = IPC[i];
                 j = IPC[j];
