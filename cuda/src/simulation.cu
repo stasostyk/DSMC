@@ -34,8 +34,6 @@ void setup(Simulation *sim, Config *conf) {
     sim->NP = 0;
     sim->totalCollisions = 0;
 
-    // TODO: most of the setup can be moved to constexpr??
-
     cudaMemset(sim->d_samples, 0, SAMPLES_SZ);
 
     sim->NP = NX * NY * NZ * conf->particlesPerCellTarget;

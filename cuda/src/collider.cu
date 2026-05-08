@@ -55,7 +55,7 @@ __global__ void no_time_counter_scheme_kernel(
 
             for (int k = 0; k < expectedCollidingPairs; k++) {
                 i = (int)(r.y * NPC);
-                j = (i + 1 + ((int)(r.z))) % NPC;
+                j = (i + 1 + ((int)(r.z * (NPC - 1)))) % NPC;
 
                 i = IPC[i];
                 j = IPC[j];
