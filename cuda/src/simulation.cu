@@ -9,7 +9,7 @@
 #include "../include/math_utils.h"
 #include "../include/cuda_utils.h"
 
-__global__ void init_rng_kernel(curandStatePhilox4_32_10_t *states, unsigned long seed) {
+__global__ void init_rng_kernel(curandState *states, unsigned long seed) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= MAX_PARTICLES) return;
     curand_init(seed, i, 0, &states[i]);
