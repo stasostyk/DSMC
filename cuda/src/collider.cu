@@ -82,8 +82,8 @@ __global__ void no_time_counter_scheme_kernel(
                 double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
                 if (curand_uniform(&rngState) < collisionProb) {
                     elastic_collision( 
-                        &(d_particleData.vx[i]), &(d_particleData.vy[i]), &(d_particleData.vz[i]), 
-                        &(d_particleData.vx[j]), &(d_particleData.vy[j]), &(d_particleData.vz[j]),
+                        &vx[i], &vy[i], &vz[i], 
+                        &vx[j], &vy[j], &vz[j],
                         relativeSpeed, &rngState );
                     collisions++;
                 }
