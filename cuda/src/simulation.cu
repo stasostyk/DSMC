@@ -335,8 +335,8 @@ __global__ void move_particles_kernel(int NP, curandState *rngStates) {
                 &rngState
             );
             // Move the reflected molecule
-            d_particleData.x[i] = Xw + Dt1 * d_particleData.vx[i];
-            d_particleData.y[i] = WingY + Dt1 * d_particleData.vy[i];
+            P[i].x = Xw + Dt1 * P[i].vx;
+            P[i].y = WingY + Dt1 * P[i].vy;
         }
     }
     #elif defined(BALL_CASE)
