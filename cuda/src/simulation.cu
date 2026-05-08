@@ -183,7 +183,7 @@ void generate_particles_in_rect(
         exit(1);
     }
 
-    int threads = 128;
+    int threads = 64;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((Nnew + threads - 1) / threads, 1, 1);
 
