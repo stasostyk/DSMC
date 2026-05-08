@@ -183,7 +183,7 @@ void generate_particles_in_rect(
         exit(1);
     }
 
-    int threads = 64;
+    int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((Nnew + threads - 1) / threads, 1, 1);
 
@@ -236,7 +236,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, 1);
     generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, 1);
 
-    int threads = 256;
+    int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
@@ -383,7 +383,7 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngState
 }
 
 void move_particles(Simulation *sim) {
-    int threads = 256;
+    int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
@@ -422,7 +422,7 @@ __global__ void accumulate_sampling_kernel(
 void accumulate_sampling(Simulation *sim) {
     sim->sampleSteps++;
 
-    dim3 threadsPerBlock(8, 8, 8);
+    dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
