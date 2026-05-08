@@ -27,7 +27,7 @@ void diffuse_scattering(
 __device__
 void diffuse_scattering_y_device(
     double *vx, double *vy, double *vz, double m, double T, double Ny, double KB,
-    curandStatePhilox4_32_10_t *rngState
+    curandState *rngState
 );
 
 __device__
@@ -36,10 +36,10 @@ void diffuse_scattering_device(
     double m, double T, 
     double nx, double ny, double nz,
     double KB,
-    curandStatePhilox4_32_10_t *rngState
+    curandState *rngState
 );
 
 __device__
-void random_isotropic_vector_device (double *R, curandStatePhilox4_32_10_t *rngState);
+void random_isotropic_vector_device (double *R, curandState *rngState);
 
 #endif //DSMC_MATH_UTILS_H

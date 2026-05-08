@@ -118,7 +118,7 @@ __global__ void generate_particles_in_rect_kernel(
     double y1, double y2,
     double z1, double z2,
     int moveFlag,
-    curandStatePhilox4_32_10_t *rngStates
+    curandState *rngStates
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= Nnew) return;
@@ -130,23 +130,20 @@ __global__ void generate_particles_in_rect_kernel(
 
     int idx = start + i;
 
-    curandStatePhilox4_32_10_t rngState = rngStates[idx];
+    curandState rngState = rngStates[idx];
 
-    double4 randomUniform = curand_uniform4_double(&rngState);
-    double rx = randomUniform.x;
-    double ry = randomUniform.y;
-    double rz = randomUniform.z;
+    double rx = curand_uniform_double(&rngState);
+    double ry = curand_uniform_double(&rngState);
+    double rz = curand_uniform_double(&rngState);
 
     // TODO possibly better to create everything in local variable, and only then store in P?
     P[idx].x = x1 + (x2 - x1) * rx;
     P[idx].y = y1 + (y2 - y1) * ry;
     P[idx].z = z1 + (z2 - z1) * rz;
 
-
-    double4 randomNormal = curand_normal4_double(&rngState);
-    double vx = randomNormal.x * d_conf.generation_derivatedMultiplier + ux;
-    double vy = randomNormal.y * d_conf.generation_derivatedMultiplier + uy;
-    double vz = randomNormal.z * d_conf.generation_derivatedMultiplier + uz;
+    double vx = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + ux;
+    double vy = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + uy;
+    double vz = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + uz;
 
     P[idx].vx = vx;
     P[idx].vy = vy;
@@ -264,7 +261,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     CHECK(cudaFree(d_new_P));
 }
 
-__global__ void move_particles_kernel(Particle *P, int NP, curandStatePhilox4_32_10_t *rngStates) {
+__global__ void move_particles_kernel(Particle *P, int NP, curandState *rngStates) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
@@ -277,7 +274,7 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandStatePhilox4_32
     P[i].y += d_conf.dt * P[i].vy;
     P[i].z += d_conf.dt * P[i].vz;
 
-    curandStatePhilox4_32_10_t rngState = rngStates[i];
+    curandState rngState = rngStates[i];
 
 
     #ifdef WING_CASE

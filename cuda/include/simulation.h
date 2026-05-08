@@ -13,7 +13,7 @@
 typedef struct {
     // for using randomness in GPU
     // allocated in device memory (GPU)
-    curandStatePhilox4_32_10_t *rngStates; 
+    rngStateType *rngStates; 
 
     Config *conf;   // allocated in host (CPU)
 

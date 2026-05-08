@@ -9,7 +9,7 @@
 #include <curand_kernel.h>
 
 __device__
-void elastic_collision(Particle *p1, Particle *p2, double Cr, curandStatePhilox4_32_10_t *rngState) {
+void elastic_collision(Particle *p1, Particle *p2, double Cr, curandState *rngState) {
     double N[3];
     random_isotropic_vector_device(N, rngState);
     Cr *= 0.5;
@@ -24,7 +24,7 @@ void elastic_collision(Particle *p1, Particle *p2, double Cr, curandStatePhilox4
 }
 
 __global__ void no_time_counter_scheme_kernel(
-    int *total_collisions, Particle *P, int *cellCount, int *cellList, curandStatePhilox4_32_10_t *rngStates
+    int *total_collisions, Particle *P, int *cellCount, int *cellList, curandState *rngStates
 ) {
     __shared__ int collisionsBlock[64];
 
@@ -41,7 +41,7 @@ __global__ void no_time_counter_scheme_kernel(
 
             int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
 
-            curandStatePhilox4_32_10_t rngState = rngStates[idx];
+            curandState rngState = rngStates[idx];
 
             // estimate number of collisions
             double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
@@ -51,9 +51,8 @@ __global__ void no_time_counter_scheme_kernel(
             // monte carlo accept/reject pairs and collide
 
             for (int k = 0; k < expectedCollidingPairs; k++) {
-                float4 r = curand_uniform4(&rngState);
-                int i_local = (int)(r.x * NPC);
-                int j_offset = (int)(r.y * (NPC - 1));
+                int i_local = (int)(curand_uniform(&rngState) * NPC);
+                int j_offset = (int)(curand_uniform(&rngState) * (NPC - 1));
                 int j_local = (i_local + 1 + j_offset) % NPC;
 
                 
@@ -70,7 +69,7 @@ __global__ void no_time_counter_scheme_kernel(
                 // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
                 // But, we assume omega=0.75, which lets us remove pow() in a simple way:
                 double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
-                if (r.z < collisionProb) {
+                if (curand_uniform(&rngState) < collisionProb) {
                     elastic_collision( &P[i], &P[j], relativeSpeed, &rngState );
                     collisions++;
                 }

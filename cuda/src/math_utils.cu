@@ -44,13 +44,11 @@ void random_isotropic_vector (double *R)
 }
 
 __device__
-void random_isotropic_vector_device (double *R, curandStatePhilox4_32_10_t *rngState)
+void random_isotropic_vector_device (double *R, curandState *rngState)
 {
-    double2 r = curand_uniform2_double(rngState);
-
-    double cosT = 1.0 - 2.0 * r.x;
+    double cosT = 1.0 - 2.0 * curand_uniform_double(rngState);
     double sinT = sqrt (1.0 - cosT * cosT);
-    double E = 2.0 * M_PI * r.y;
+    double E = 2.0 * M_PI * curand_uniform_double(rngState);
     R[0] = cosT;
     R[1] = sinT * cos(E);
     R[2] = sinT * sin(E);
@@ -62,7 +60,7 @@ double rayleigh(double sigma) {
 }
 
 __device__
-double rayleigh_device(double sigma, curandStatePhilox4_32_10_t *rngState) {
+double rayleigh_device(double sigma, curandState *rngState) {
     double u = curand_uniform_double(rngState); // randu()
     return sigma * sqrt(-2.0 * log(u));
 }
@@ -70,7 +68,7 @@ double rayleigh_device(double sigma, curandStatePhilox4_32_10_t *rngState) {
 __device__
 void diffuse_scattering_y_device(
     double *vx, double *vy, double *vz, double m, double T, double Ny, double KB,
-    curandStatePhilox4_32_10_t *rngState
+    curandState *rngState
 ) {
     double2 r = curand_normal2_double(rngState);
 
@@ -145,7 +143,7 @@ void diffuse_scattering_device(
     double m, double T, 
     double nx, double ny, double nz,
     double KB,
-    curandStatePhilox4_32_10_t *rngState
+    curandState *rngState
 ) {
     double RT = sqrt(KB * T / m);
 
