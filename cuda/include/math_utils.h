@@ -40,6 +40,6 @@ void diffuse_scattering_device(
 );
 
 __device__
-void random_isotropic_vector_device (double *R, curandState *rngState);
+void random_isotropic_vector_device (double *R, curandStatePhilox4_32_10_t *rngState);
 
 #endif //DSMC_MATH_UTILS_H
