@@ -35,6 +35,8 @@ void setup(Simulation *sim, Config *conf) {
     sim->NP = 0;
     sim->totalCollisions = 0;
 
+    cudaMalloc(&sim->d_totalCollisions, sizeof(unsigned long long));
+    cudaMemset(sim->d_totalCollisions, 0, sizeof(unsigned long long));
     cudaMemset(sim->d_samples, 0, SAMPLES_SZ);
 
     sim->NP = NX * NY * NZ * conf->particlesPerCellTarget;
@@ -447,4 +449,6 @@ void clearPointers(Simulation *sim) {
     CHECK(cudaFree(sim->d_samples));
     CHECK(cudaFree(sim->d_cellCount));
     CHECK(cudaFree(sim->d_cellList));
+
+    CHECK(cudaFree(sim->d_totalCollisions));
 }

@@ -34,7 +34,9 @@ typedef struct {
     // counters
     int sampleSteps;
     int NP;
-    long long totalCollisions;
+
+    unsigned long long totalCollisions;
+    unsigned long long *d_totalCollisions;
 } Simulation;
 
 void setup(Simulation *sim, Config *conf);

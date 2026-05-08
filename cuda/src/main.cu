@@ -12,6 +12,7 @@
 void move_neccessary_data_before_printing(Simulation *sim) {
     // Particle data is mostly stored in and dealt in GPU, 
     // to have the newest version in CPU, it needs to be copied.
+    CHECK(cudaMemcpy(&sim->totalCollisions, sim->d_totalCollisions, sizeof(unsigned long long), cudaMemcpyDeviceToHost))
     CHECK(cudaMemcpy(sim->P, sim->d_P, sim->NP * sizeof(Particle), cudaMemcpyDeviceToHost));
     CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
 } 
@@ -49,7 +50,7 @@ int main(void) {
         apply_boundary_conditions_free_stream(&sim);
         index_particles(&sim);
         
-        sim.totalCollisions += collide_particles(&sim);
+        collide_particles(&sim);
 
         if (step >= conf.firstSampleStep && step % conf.samplingPeriod == 0) {
             accumulate_sampling(&sim);

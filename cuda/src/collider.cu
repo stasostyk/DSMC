@@ -24,7 +24,7 @@ void elastic_collision(Particle *p1, Particle *p2, double Cr, curandState *rngSt
 }
 
 __global__ void no_time_counter_scheme_kernel(
-    int *total_collisions, Particle *P, int *cellCount, int *cellList, curandState *rngStates
+    unsigned long long *total_collisions, Particle *P, int *cellCount, int *cellList, curandState *rngStates
 ) {
     __shared__ int collisionsBlock[64];
 
@@ -99,11 +99,11 @@ __global__ void no_time_counter_scheme_kernel(
     }
     
     if (tid == 0) {
-        atomicAdd(total_collisions, collisionsBlock[0]);
+        atomicAdd(total_collisions, (unsigned long long)collisionsBlock[0]);
     }
 }
 
-int collide_particles(Simulation *sim) {
+void collide_particles(Simulation *sim) {
     dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
@@ -111,18 +111,8 @@ int collide_particles(Simulation *sim) {
         (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
     );
 
-    int *d_total_collisions;
-    CHECK(cudaMalloc(&d_total_collisions, sizeof(int)));
-    CHECK(cudaMemset(d_total_collisions, 0, sizeof(int)));
-
     no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        d_total_collisions, sim->d_P, sim->d_cellCount, sim->d_cellList, sim->rngStates
+        sim->d_totalCollisions, sim->d_P, sim->d_cellCount, sim->d_cellList, sim->rngStates
     );
     CHECK_KERNELCALL();
-
-    int totalCollisions;
-    CHECK(cudaMemcpy(&totalCollisions, d_total_collisions, sizeof(int), cudaMemcpyDeviceToHost));
-    CHECK(cudaFree(d_total_collisions));
-
-    return totalCollisions;
 }
