@@ -326,7 +326,7 @@ __global__ void move_particles_kernel(int NP, curandState *rngStates) {
         if ( Xw > WingX && Xw < WingX + WingLength ) {
             // Molecule interacts with the wing during the time step
             // Linear interpolation of the time of scattering, Eq. (6.5.4)
-            double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P[i].y );
+            double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - d_particleData.y[i] );
             // Generate velocity vector of the reflected molecule
             diffuse_scattering_y_device(
                 &(d_particleData.vx[i]), &(d_particleData.vy[i]), &(d_particleData.vz[i]), 
