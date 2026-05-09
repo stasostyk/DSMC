@@ -49,6 +49,9 @@ void config_setup(Config *config) {
         config->MaFree = 4.0; // Free stream Mach number
         config->PFree = 0.1; // Free stream pressure (Pa)
         config->TFree = 200.0; // Free stream temperature (K)
+
+        // derived
+        config->ballRadiusSquared = config->ballRadius * config->ballRadius;
     #endif
 
     // VHS model
