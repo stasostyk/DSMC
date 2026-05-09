@@ -125,6 +125,24 @@ void generate_particles_in_rect(
 void initialize_particles(Simulation *sim, Config *conf) {
     sim->NP = 0;
     generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 0);
+
+#ifdef BALL_CASE
+    double cx = conf->ballCenterX;
+    double cy = conf->ballCenterY;
+    double cz = conf->ballCenterZ;
+    double R2 = conf->ballRadius * conf->ballRadius;
+
+    for (int i = 0; i < sim->NP; i++) {
+        double rx = sim->P[i].x - cx;
+        double ry = sim->P[i].y - cy;
+        double rz = sim->P[i].z - cz;
+        if (rx*rx + ry*ry + rz*rz <= R2) {
+            sim->P[i] = sim->P[sim->NP - 1];
+            sim->NP--;
+            i--;
+        }
+    }
+#endif
 }
 
 

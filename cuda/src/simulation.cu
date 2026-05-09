@@ -200,9 +200,32 @@ void generate_particles_in_rect(
     sim->NP += Nnew;
 }
 
+#ifdef BALL_CASE
+void remove_particles_inside_ball(Simulation *sim) {
+    double cx = conf->ballCenterX;
+    double cy = conf->ballCenterY;
+    double cz = conf->ballCenterZ;
+    double R2 = conf->ballRadius * conf->ballRadius;
+
+    for (int i = 0; i < sim->NP; i++) {
+        double rx = sim->P[i].x - cx;
+        double ry = sim->P[i].y - cy;
+        double rz = sim->P[i].z - cz;
+        if (rx*rx + ry*ry + rz*rz <= R2) {
+            sim->P[i] = sim->P[sim->NP - 1];
+            sim->NP--;
+            i--;
+        }
+    }
+}
+#endif
+
 void initialize_particles(Simulation *sim) {
     sim->NP = 0;
     generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
+#ifdef BALL_CASE
+    remove_particles_inside_ball(sim);
+#endif
 }
 
 __global__ void filter_particles_out_of_bounds(
