@@ -5,7 +5,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CUDA_STANDARD 11)
 
 # Set GPU architectures
-set(CMAKE_CUDA_ARCHITECTURES 75 86)
+set(CMAKE_CUDA_ARCHITECTURES 70)
 
 set(SOURCES
     src/main.cu
