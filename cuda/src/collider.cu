@@ -68,12 +68,12 @@ __global__ void no_time_counter_scheme_kernel(
                     relativeSpeed *= 0.5;
                     double VC[3] = { 0.5 * ( vx_j + vx_i ), 0.5 * ( vy_j + vy_i ), 0.5 * ( vz_j + vz_i ) };
                     double VCr[3] = { relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2] };
-                    P.x[i] = VC[0] + VCr[0];
-                    P.y[i] = VC[1] + VCr[1];
-                    P.z[i] = VC[2] + VCr[2];
-                    P.x[j] = VC[0] - VCr[0];
-                    P.y[j] = VC[1] - VCr[1];
-                    P.z[j] = VC[2] - VCr[2];
+                    P.vx[i] = VC[0] + VCr[0];
+                    P.vy[i] = VC[1] + VCr[1];
+                    P.vz[i] = VC[2] + VCr[2];
+                    P.vx[j] = VC[0] - VCr[0];
+                    P.vy[j] = VC[1] - VCr[1];
+                    P.vz[j] = VC[2] - VCr[2];
 
                     collisions++;
                 }
