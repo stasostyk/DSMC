@@ -8,28 +8,6 @@
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 
-__device__
-void elastic_collision(double *vx1,
-                       double *vy1,
-                       double *vz1,
-                       double *vx2,
-                       double *vy2,
-                       double *vz2,
-                       double Cr,
-                       curandState *rngState) {
-    double N[3];
-    random_isotropic_vector_device(N, rngState);
-    Cr *= 0.5;
-    double VC[3] = { 0.5 * ( *vx2 + *vx1 ), 0.5 * ( *vy2 + *vy1 ), 0.5 * ( *vz2 + *vz1 ) };
-    double VCr[3] = { Cr * N[0], Cr * N[1], Cr * N[2] };
-    *vx1 = VC[0] + VCr[0];
-    *vy1 = VC[1] + VCr[1];
-    *vz1 = VC[2] + VCr[2];
-    *vx2 = VC[0] - VCr[0];
-    *vy2 = VC[1] - VCr[1];
-    *vz2 = VC[2] - VCr[2];
-}
-
 __global__ void no_time_counter_scheme_kernel(
     unsigned long long *total_collisions, Particles P, int *cellCount, int *cellList, curandState *rngStates
 ) {
@@ -67,7 +45,15 @@ __global__ void no_time_counter_scheme_kernel(
                 int i = IPC[i_local];
                 int j = IPC[j_local];
 
-                double relativeVel[3] = { P.vx[j] - P.vx[i], P.vy[j] - P.vy[i], P.vz[j] - P.vz[i] };
+                double vx_i = P.vx[i];
+                double vy_i = P.vy[i];
+                double vz_i = P.vz[i];
+
+                double vx_j = P.vx[j];
+                double vy_j = P.vy[j];
+                double vz_j = P.vz[j];
+
+                double relativeVel[3] = { vx_j - vx_i, vy_j - vy_i, vz_j - vz_i };
                 double relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
                                             + relativeVel[1] * relativeVel[1]
                                             + relativeVel[2] * relativeVel[2]);
@@ -77,14 +63,18 @@ __global__ void no_time_counter_scheme_kernel(
                 // But, we assume omega=0.75, which lets us remove pow() in a simple way:
                 double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
                 if (curand_uniform(&rngState) < collisionProb) {
-                    elastic_collision(&P.vx[i],
-                                      &P.vy[i],
-                                      &P.vz[i],
-                                      &P.vx[j],
-                                      &P.vy[j],
-                                      &P.vz[j],
-                                      relativeSpeed,
-                                      &rngState );
+                    double N[3];
+                    random_isotropic_vector_device(N, &rngState);
+                    relativeSpeed *= 0.5;
+                    double VC[3] = { 0.5 * ( vx_j + vx_i ), 0.5 * ( vy_j + vy_i ), 0.5 * ( vz_j + vz_i ) };
+                    double VCr[3] = { relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2] };
+                    P.x[i] = VC[0] + VCr[0];
+                    P.y[i] = VC[1] + VCr[1];
+                    P.z[i] = VC[2] + VCr[2];
+                    P.x[j] = VC[0] - VCr[0];
+                    P.y[j] = VC[1] - VCr[1];
+                    P.z[j] = VC[2] - VCr[2];
+
                     collisions++;
                 }
 
