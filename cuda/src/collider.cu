@@ -1,7 +1,7 @@
 #include "../include/collider.h"
 #include "../include/config.h"
 #include "../include/math_utils.h"
-#include "../include/particle.h"
+#include "../include/particles.h"
 #include "../include/simulation.h"
 #include "../include/cuda_utils.h"
 #include <math.h>
@@ -9,22 +9,29 @@
 #include <curand_kernel.h>
 
 __device__
-void elastic_collision(Particle *p1, Particle *p2, double Cr, curandState *rngState) {
+void elastic_collision(double *vx1,
+                       double *vy1,
+                       double *vz1,
+                       double *vx2,
+                       double *vy2,
+                       double *vz2,
+                       double Cr,
+                       curandState *rngState) {
     double N[3];
     random_isotropic_vector_device(N, rngState);
     Cr *= 0.5;
-    double VC[3] = { 0.5 * ( p2->vx + p1->vx ), 0.5 * ( p2->vy + p1->vy ), 0.5 * ( p2->vz + p1->vz ) };
+    double VC[3] = { 0.5 * ( *vx2 + *vx1 ), 0.5 * ( *vy2 + *vy1 ), 0.5 * ( *vz2 + *vz1 ) };
     double VCr[3] = { Cr * N[0], Cr * N[1], Cr * N[2] };
-    p1->vx = VC[0] + VCr[0];
-    p1->vy = VC[1] + VCr[1];
-    p1->vz = VC[2] + VCr[2];
-    p2->vx = VC[0] - VCr[0];
-    p2->vy = VC[1] - VCr[1];
-    p2->vz = VC[2] - VCr[2];
+    *vx1 = VC[0] + VCr[0];
+    *vy1 = VC[1] + VCr[1];
+    *vz1 = VC[2] + VCr[2];
+    *vx2 = VC[0] - VCr[0];
+    *vy2 = VC[1] - VCr[1];
+    *vz2 = VC[2] - VCr[2];
 }
 
 __global__ void no_time_counter_scheme_kernel(
-    unsigned long long *total_collisions, Particle *P, int *cellCount, int *cellList, curandState *rngStates
+    unsigned long long *total_collisions, Particles P, int *cellCount, int *cellList, curandState *rngStates
 ) {
     __shared__ int collisionsBlock[64];
 
@@ -60,7 +67,7 @@ __global__ void no_time_counter_scheme_kernel(
                 int i = IPC[i_local];
                 int j = IPC[j_local];
 
-                double relativeVel[3] = { P[j].vx - P[i].vx, P[j].vy - P[i].vy, P[j].vz - P[i].vz };
+                double relativeVel[3] = { P.vx[j] - P.vx[i], P.vy[j] - P.vy[i], P.vz[j] - P.vz[i] };
                 double relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
                                             + relativeVel[1] * relativeVel[1]
                                             + relativeVel[2] * relativeVel[2]);
@@ -70,7 +77,14 @@ __global__ void no_time_counter_scheme_kernel(
                 // But, we assume omega=0.75, which lets us remove pow() in a simple way:
                 double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
                 if (curand_uniform(&rngState) < collisionProb) {
-                    elastic_collision( &P[i], &P[j], relativeSpeed, &rngState );
+                    elastic_collision(&P.vx[i],
+                                      &P.vy[i],
+                                      &P.vz[i],
+                                      &P.vx[j],
+                                      &P.vy[j],
+                                      &P.vz[j],
+                                      relativeSpeed,
+                                      &rngState );
                     collisions++;
                 }
 
