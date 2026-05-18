@@ -31,26 +31,30 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
         curandState rngState = rngStates[idx];
         int NPC = cellCount[idx];
+        // create a local list for shuffling
+        int localParticleList[MAX_PARTICLES_PER_CELL];
+        for (int i = 0; i < NPC; i++) {
+            localParticleList[i] = cellList[IDX_LIST(k, l, m, i)];
+        }
+
         int N_x = (NPC % 2 == 0) ? NPC - 1 : NPC;
         if (NPC >= 2) {
-
-
             for (int b = 0; b < d_conf.hss_nbatch; b++) {
 //                5. fisher-yates shuffle
                 for (int i = 0; i < NPC; i++) {
                     int j = i + (int) (curand_uniform(&rngState) * (NPC - i));
                     if (j < NPC) {
-                        int temp = cellList[IDX_LIST(k, l, m, i)];
-                        cellList[IDX_LIST(k, l, m, i)] = cellList[IDX_LIST(k, l, m, j)];
-                        cellList[IDX_LIST(l, l, m, j)] = temp;
+                        int temp = localParticleList[i];
+                        localParticleList[i] = localParticleList[j];
+                        localParticleList[j] = temp;
                     }
                 }
 
                 for (int i = 0; i < NPC / 2; i++) {
-                    int j = i + NPC / 2;
+                    int j = i + (NPC + 1) / 2;
                     if (j < NPC) {
-                        int i_global = cellList[IDX_LIST(k, l, m, i)];
-                        int j_global = cellList[IDX_LIST(k, l, m, j)];
+                        int i_global = localParticleList[i];
+                        int j_global = localParticleList[j];
 
                         double vx_i = P.vx[i_global];
                         double vy_i = P.vy[i_global];
