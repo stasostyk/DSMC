@@ -55,6 +55,8 @@ typedef struct {
         double ballRadius;
         double Tb;
 
+        double ballRadiusSquared; // derived
+
         // stream
         double MaFree;
         double PFree;

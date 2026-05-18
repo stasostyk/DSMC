@@ -200,9 +200,65 @@ void generate_particles_in_rect(
     sim->NP += Nnew;
 }
 
+#ifdef BALL_CASE
+// TODO this kernel (and the function that calls it) 
+// is super similar to filter_particles_out_of_bounds,
+// maybe possible to use the same one for filtering.
+__global__ void filter_particles_inside_ball(
+    Particle *P, Particle *P_out, int NP, int *new_NP
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+
+    double cx = d_conf.ballCenterX;
+    double cy = d_conf.ballCenterY;
+    double cz = d_conf.ballCenterZ;
+    double R2 = d_conf.ballRadiusSquared;
+
+    double rx = P[i].x - cx;
+    double ry = P[i].y - cy;
+    double rz = P[i].z - cz;
+
+    // check if particle valid
+    if (rx*rx + ry*ry + rz*rz > R2) {
+        int pos = atomicAdd(new_NP, 1);
+        P_out[pos] = P[i];
+    }
+}
+
+void remove_particles_inside_ball(Simulation *sim) {
+    int threads = 128;
+    dim3 threadsPerBlock(threads, 1, 1);
+    dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
+
+    int *d_new_NP;
+    CHECK(cudaMalloc(&d_new_NP, sizeof(int)));
+    CHECK(cudaMemset(d_new_NP, 0, sizeof(int)));
+
+    filter_particles_inside_ball<<<blocksPerGrid, threadsPerBlock>>>(
+        sim->d_P, sim->d_new_P, sim->NP, d_new_NP
+    );
+    CHECK_KERNELCALL();
+
+    int host_new_NP;
+    CHECK(cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
+    sim->NP = host_new_NP;
+    
+    // swap d_P and d_new_P
+    Particle *tmp = sim->d_P;
+    sim->d_P = sim->d_new_P;
+    sim->d_new_P = tmp;
+
+    CHECK(cudaFree(d_new_NP));
+}
+#endif
+
 void initialize_particles(Simulation *sim) {
     sim->NP = 0;
     generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
+#ifdef BALL_CASE
+    remove_particles_inside_ball(sim);
+#endif
 }
 
 __global__ void filter_particles_out_of_bounds(
