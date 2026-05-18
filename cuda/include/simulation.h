@@ -53,4 +53,4 @@ void move_particles(Simulation *sim);
 void accumulate_sampling(Simulation *sim);
 void clearPointers(Simulation *sim);
 
-#endif // SIMULATION_Hvo
+#endif // SIMULATION_H
