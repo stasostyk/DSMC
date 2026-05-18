@@ -1,5 +1,8 @@
 #include <math.h>
+#include <cuda_runtime.h>
 #include "../include/config.h"
+
+__constant__ Config d_conf;
 
 void config_setup(Config *config) {
     config->KB = 1.380649e-23; // Boltzmann constant in J/K
@@ -17,7 +20,7 @@ void config_setup(Config *config) {
     // simulation loop parameters
     config->dt = 1.0e-5;
     config->nSteps = 2000;
-    config->printPeriod = 200;
+    config->printPeriod = 0;
     config->particlesPerCellTarget = 200;
     config->firstSampleStep = 1000;
     config->samplingPeriod = 10;
@@ -49,15 +52,42 @@ void config_setup(Config *config) {
     #endif
 
     // VHS model
-    config->omega = 0.77;          // or ~0.74 to 0.77 for air-like species
+    // NOTE: collider calculations assume omega=0.75, so be careful when changing
+    config->omega = 0.75;          // or ~0.74 to 0.77 for air-like species
     config->dRef  = 4.0e-10;       // reference diameter, meters
 
     // derived parameters
     config->moleculeMass = config->molarMass / config->NA;
 
+    config->dx = config->Lx / NX;
+    config->dy = config->Ly / NY;
+    config->dz = config->Lz / NZ;
+    config->cellVolume = config->dx * config->dy * config->dz;
+
+    #ifdef WING_CASE
+        double angleOfAttack = config->angleOfAttack;
+    #elif defined(BALL_CASE)
+        double angleOfAttack = 0.;
+    #endif
+    config->NFree = config->PFree / ( config->KB * config->TFree );
+    config->UFree = config->MaFree * sqrt ( ( 5.0 / 3.0 ) * config->KB * config->TFree / config->moleculeMass );
+    config->UxFree = config->UFree * cos ( M_PI * angleOfAttack / 180.0 );
+    config->UyFree = - config->UFree * sin ( M_PI * angleOfAttack / 180.0 );
+    config->UzFree = 0.0;
+
+    config->weight = config->NFree * config->cellVolume / config->particlesPerCellTarget;
+
     // derived, used in collider
     config->sigmaRef = M_PI * config->dRef * config->dRef;
     config->CrRef = sqrt(4.0 * config->KB * config->TFree / config->moleculeMass);
+
+    // precompute multiplier used in no time collision scheme
+    double majorant = 9.0 * config->sigmaRef * sqrt(config->KB * config->TFree / config->moleculeMass);
+    config->ntcs_collidingPairsMultiplier = 0.5 * config->weight * majorant * config->dt / config->cellVolume;
+    config->ntcs_collisionProbExponent = 2.0*config->omega - 1.0;
+    config->ntcs_collisionProbMultiplier = pow(config->CrRef, config->ntcs_collisionProbExponent) * config->sigmaRef / majorant;
+
+    config->generation_derivatedMultiplier = sqrt(config->KB * config->TFree / config->moleculeMass);
 }
 
 

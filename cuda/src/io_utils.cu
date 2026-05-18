@@ -46,9 +46,9 @@ void write_averaged_macros(Simulation *sim, const char *filename) {
     for (int k = 0; k < NX; k++) {
         for (int l = 0; l < NY; l++) {
             for (int m = 0; m < NZ; m++) {
-                double xc = (k + 0.5) * sim->dx;
-                double yc = (l + 0.5) * sim->dy;
-                double zc = (m + 0.5) * sim->dz;
+                double xc = (k + 0.5) * sim->conf->dx;
+                double yc = (l + 0.5) * sim->conf->dy;
+                double zc = (m + 0.5) * sim->conf->dz;
 
                 double avgNP = sim->samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
 
@@ -67,7 +67,7 @@ void write_averaged_macros(Simulation *sim, const char *filename) {
                 double meanV2 = sim->samples[IDX_CELL(k, l, m)].countV2 / count;
                 double meanU2 = ux * ux + uy * uy + uz * uz;
 
-                double n = sim->weight * avgNP / sim->cellVolume;
+                double n = sim->conf->weight * avgNP / sim->conf->cellVolume;
                 double T = sim->conf->moleculeMass * (meanV2 - meanU2) / (3.0 * sim->conf->KB);
 
                 fprintf(fp, "%e %e %e %e %e %e %e %e %e\n",
@@ -92,7 +92,7 @@ void write_vti(Simulation *sim, const char *filename) {
     fprintf(fp, "<VTKFile type=\"ImageData\" version=\"0.1\" byte_order=\"LittleEndian\">\n");
 
     fprintf(fp, "<ImageData WholeExtent=\"0 %d 0 %d 0 %d\" Origin=\"0 0 0\" Spacing=\"%e %e %e\">\n",
-            NX, NY, NZ, sim->dx, sim->dy, sim->dz);
+            NX, NY, NZ, sim->conf->dx, sim->conf->dy, sim->conf->dz);
 
     fprintf(fp, "<CellData Scalars=\"density\">\n");
 
@@ -102,7 +102,7 @@ void write_vti(Simulation *sim, const char *filename) {
         for (int l = 0; l < NY; l++) {
             for (int k = 0; k < NX; k++) {
                 double avgNP = sim->samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
-                double n = (avgNP > 0.0) ? sim->weight * avgNP / sim->cellVolume : 0.0;
+                double n = (avgNP > 0.0) ? sim->conf->weight * avgNP / sim->conf->cellVolume : 0.0;
                 fprintf(fp, "%e ", n);
             }
         }

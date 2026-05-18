@@ -1,13 +1,14 @@
 #ifndef DSMC_CONFIG_H
 #define DSMC_CONFIG_H
 
-#define MAX_PARTICLES 500000
-#define MAX_PARTICLES_PER_CELL 2000
-#define NX 10
-#define NY 10
-#define NZ 10
+#include <cuda_runtime.h>
 
-// TODO calculate once these constants
+#define MAX_PARTICLES 100000000
+#define MAX_PARTICLES_PER_CELL 2000
+#define NX 50
+#define NY 50
+#define NZ 50
+
 #define PARTICLES_SZ (MAX_PARTICLES * sizeof(Particle))
 #define SAMPLES_SZ (NX * NY * NZ * sizeof(Cell))
 #define CELL_COUNT_SZ (NX * NY * NZ * sizeof(int))
@@ -66,11 +67,25 @@ typedef struct {
 
     // derived parameters
     double moleculeMass;
+    double dx, dy, dz;
+    double cellVolume;
+    double weight;
+    double NFree;
+    double UFree;
+    double UxFree, UyFree, UzFree;
 
     // derived, used in collider
     double sigmaRef;
     double CrRef;
+    double ntcs_collisionProbMultiplier; // used in no time collision scheme
+    double ntcs_collidingPairsMultiplier; // used in no time collision scheme
+    double ntcs_collisionProbExponent;    // used in no time collision scheme
+
+    // derived, used in simulation
+    double generation_derivatedMultiplier;
 } Config;
+
+extern __constant__ Config d_conf;
 
 void config_setup(Config *config);
 

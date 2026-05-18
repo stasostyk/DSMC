@@ -11,13 +11,11 @@
 #define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + q)
 
 typedef struct {
-    curandState *rngStates; // for using randomness in GPU
-                            // allocated in device memory (GPU)
+    // for using randomness in GPU
+    // allocated in device memory (GPU)
+    curandState *rngStates; 
 
-    // TODO config maybe could be used in constant memory on GPU
-    // (to avoid so many accesses to global memory)
     Config *conf;   // allocated in host (CPU)
-    Config *d_conf; // allocated in device (GPU)    
 
     // Particles will be initialized by device kernels, and during simulation
     // will be dealt only by kernels (GPU). There is no need to allocate
@@ -35,14 +33,6 @@ typedef struct {
     int sampleSteps;
     int NP;
     long long totalCollisions;
-
-    // derived quantities
-    double dx, dy, dz;
-    double cellVolume;
-    double weight;
-    double NFree;
-    double UFree;
-    double UxFree, UyFree, UzFree;
 } Simulation;
 
 void setup(Simulation *sim, Config *conf);

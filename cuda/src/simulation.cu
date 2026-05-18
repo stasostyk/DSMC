@@ -17,10 +17,9 @@ __global__ void init_rng_kernel(curandState *states, unsigned long seed) {
 
 void setup(Simulation *sim, Config *conf) {
     sim->conf = (Config *) malloc(sizeof(Config));
-    CHECK(cudaMalloc(&sim->d_conf, sizeof(Config)));
 
     memcpy(sim->conf, conf, sizeof(Config));
-    CHECK(cudaMemcpy(sim->d_conf, conf, sizeof(Config), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpyToSymbol(d_conf, conf, sizeof(Config)));
 
     sim->P = (Particle *)malloc(PARTICLES_SZ);
     sim->samples = (Cell *)malloc(SAMPLES_SZ);
@@ -35,14 +34,7 @@ void setup(Simulation *sim, Config *conf) {
     sim->NP = 0;
     sim->totalCollisions = 0;
 
-    // TODO: most of the setup can be moved to constexpr??
-
     cudaMemset(sim->d_samples, 0, SAMPLES_SZ);
-
-    sim->dx = conf->Lx / NX;
-    sim->dy = conf->Ly / NY;
-    sim->dz = conf->Lz / NZ;
-    sim->cellVolume = sim->dx * sim->dy * sim->dz;
 
     sim->NP = NX * NY * NZ * conf->particlesPerCellTarget;
 
@@ -50,19 +42,6 @@ void setup(Simulation *sim, Config *conf) {
         fprintf(stderr, "Too many particles for MAX_PARTICLES\n");
         exit(1);
     }
-
-    #ifdef WING_CASE
-        double angleOfAttack = conf->angleOfAttack;
-    #elif defined(BALL_CASE)
-        double angleOfAttack = 0.;
-    #endif
-    sim->NFree = conf->PFree / ( conf->KB * conf->TFree );
-    sim->UFree = conf->MaFree * sqrt ( ( 5.0 / 3.0 ) * conf->KB * conf->TFree / conf->moleculeMass );
-    sim->UxFree = sim->UFree * cos ( M_PI * angleOfAttack / 180.0 );
-    sim->UyFree = - sim->UFree * sin ( M_PI * angleOfAttack / 180.0 );
-    sim->UzFree = 0.0;
-
-    sim->weight = sim->NFree * sim->cellVolume / conf->particlesPerCellTarget;
 
     // init randomness
     int threads = 256;
@@ -86,8 +65,7 @@ __global__ void reset_cell_count_kernel(int *cellCount) {
 
 // TODO dx, dy, dz could be constant memory (or in #define)
 __global__ void bin_particles_kernel(
-    Particle *P, int *cellCount, int *cellList, int NP,
-    double dx, double dy, double dz
+    Particle *P, int *cellCount, int *cellList, int NP
 ) {
     // TODO this seems like a bin pattern, could be improved
     // note: the bottleneck is the atomicAdd
@@ -95,9 +73,9 @@ __global__ void bin_particles_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    int k = (int)(P[i].x / dx);
-    int l = (int)(P[i].y / dy);
-    int m = (int)(P[i].z / dz);
+    int k = (int)(P[i].x / d_conf.dx);
+    int l = (int)(P[i].y / d_conf.dy);
+    int m = (int)(P[i].z / d_conf.dz);
 
     if (k < 0) k = 0;
     if (k >= NX) k = NX - 1;
@@ -111,7 +89,7 @@ __global__ void bin_particles_kernel(
 }
 
 void index_particles(Simulation *sim) {
-    dim3 threadsPerBlock(8, 8, 8);
+    dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
@@ -123,49 +101,49 @@ void index_particles(Simulation *sim) {
     reset_cell_count_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_cellCount);
     CHECK_KERNELCALL();
 
-    int thr = 128;
+    int thr = 64;
     dim3 threadsPerBlock2(thr, 1, 1);
     dim3 blocksPerGrid2((sim->NP + thr - 1) / thr, 1, 1);
     bin_particles_kernel<<<blocksPerGrid2, threadsPerBlock2>>>(
-        sim->d_P, sim->d_cellCount, sim->d_cellList, sim->NP,
-        sim->dx, sim->dy, sim->dz
+        sim->d_P, sim->d_cellCount, sim->d_cellList, sim->NP
     );
     CHECK_KERNELCALL();
 }
 
 __global__ void generate_particles_in_rect_kernel(
     Particle *P,
-    Config *conf,
     int start,
     int Nnew,
     double x1, double x2, 
     double y1, double y2,
     double z1, double z2,
-    double ux, double uy, double uz,
-    double dt,
-    double Tgas,
     int moveFlag,
     curandState *rngStates
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= Nnew) return;
 
-    int idx = start + i;
-    // TODO rngStates create a local variable -- don't access the global one
+    double ux = d_conf.UxFree;
+    double uy = d_conf.UyFree;
+    double uz = d_conf.UzFree; 
+    double dt = d_conf.dt;
 
-    double rx = curand_uniform(&rngStates[idx]);
-    double ry = curand_uniform(&rngStates[idx]);
-    double rz = curand_uniform(&rngStates[idx]);
+    int idx = start + i;
+
+    curandState rngState = rngStates[idx];
+
+    double rx = curand_uniform_double(&rngState);
+    double ry = curand_uniform_double(&rngState);
+    double rz = curand_uniform_double(&rngState);
 
     // TODO possibly better to create everything in local variable, and only then store in P?
     P[idx].x = x1 + (x2 - x1) * rx;
     P[idx].y = y1 + (y2 - y1) * ry;
     P[idx].z = z1 + (z2 - z1) * rz;
 
-    // TODO compute the sqrt in CPU, and pass it to GPU as param
-    double vx = curand_normal(&rngStates[idx]) * sqrt(conf->KB * Tgas / conf->moleculeMass) + ux;
-    double vy = curand_normal(&rngStates[idx]) * sqrt(conf->KB * Tgas / conf->moleculeMass) + uy;
-    double vz = curand_normal(&rngStates[idx]) * sqrt(conf->KB * Tgas / conf->moleculeMass) + uz;
+    double vx = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + ux;
+    double vy = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + uy;
+    double vz = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + uz;
 
     P[idx].vx = vx;
     P[idx].vy = vy;
@@ -176,6 +154,8 @@ __global__ void generate_particles_in_rect_kernel(
         P[idx].y += dt * vy;
         P[idx].z += dt * vz;
     }
+
+    rngStates[idx] = rngState;
 }
 
 
@@ -184,16 +164,12 @@ void generate_particles_in_rect(
     double x1, double x2,
     double y1, double y2,
     double z1, double z2,
-    double Tgas,
     int moveFlag
 ) {
-    double ngas = sim->NFree;
-    double ux = sim->UxFree;
-    double uy = sim->UyFree;
-    double uz = sim->UzFree; 
+    double ngas = sim->conf->NFree;
 
     double V = (x2 - x1) * (y2 - y1) * (z2 - z1);
-    double N_add_exp = ngas * V / sim->weight;
+    double N_add_exp = ngas * V / sim->conf->weight;
     int Nnew;
     if ( N_add_exp > 20.0 ) { // use uniform approximation if large, poisson if small
         Nnew = (int)(N_add_exp);
@@ -207,14 +183,14 @@ void generate_particles_in_rect(
         exit(1);
     }
 
-    int threads = 256;
+    int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((Nnew + threads - 1) / threads, 1, 1);
 
     generate_particles_in_rect_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_P, sim->d_conf, sim->NP, Nnew, 
-        x1, x2, y1, y2, z1, z2, ux, uy, uz, 
-        sim->conf->dt, Tgas, moveFlag, sim->rngStates
+        sim->d_P, sim->NP, Nnew, 
+        x1, x2, y1, y2, z1, z2, 
+        moveFlag, sim->rngStates
     );
     CHECK_KERNELCALL();
 
@@ -223,11 +199,11 @@ void generate_particles_in_rect(
 
 void initialize_particles(Simulation *sim) {
     sim->NP = 0;
-    generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, sim->conf->TFree, 0);
+    generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
 }
 
 __global__ void filter_particles_out_of_bounds(
-    Config *conf, Particle *P, Particle *P_out, int NP, int *new_NP
+    Particle *P, Particle *P_out, int NP, int *new_NP
 ) {
     // TODO this can be possibly optimized:
     // 1st kernel: mark the particles true/false if they need to be removed
@@ -238,9 +214,9 @@ __global__ void filter_particles_out_of_bounds(
     if (i >= NP) return;
 
     // check if particle valid
-    if (P[i].x >= 0.0 && P[i].x < conf->Lx &&
-        P[i].y >= 0.0 && P[i].y < conf->Ly &&
-        P[i].z >= 0.0 && P[i].z < conf->Lz
+    if (P[i].x >= 0.0 && P[i].x < d_conf.Lx &&
+        P[i].y >= 0.0 && P[i].y < d_conf.Ly &&
+        P[i].z >= 0.0 && P[i].z < d_conf.Lz
     ) {
         int pos = atomicAdd(new_NP, 1);
         P_out[pos] = P[i];
@@ -253,14 +229,14 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     //      the previous task (move_particles) is finished because generation
     //      could be done in a way so that it doesnt overlap? (note: use different streams)
     Config *conf = sim->conf;
-    generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
-    generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 1);
-    generate_particles_in_rect(sim, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, conf->TFree, 1);
-    generate_particles_in_rect(sim, 0.0, conf->Lx, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, conf->TFree, 1);
-    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, conf->TFree, 1);
-    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, conf->TFree, 1);
+    generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, 1);
+    generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, 1);
+    generate_particles_in_rect(sim, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, 1);
+    generate_particles_in_rect(sim, 0.0, conf->Lx, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, 1);
+    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, 1);
+    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, 1);
 
-    int threads = 256;
+    int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
@@ -271,7 +247,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     CHECK(cudaMemset(d_new_NP, 0, sizeof(int)));
 
     filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_conf, sim->d_P, d_new_P, sim->NP, d_new_NP
+        sim->d_P, d_new_P, sim->NP, d_new_NP
     );
     CHECK_KERNELCALL();
 
@@ -285,7 +261,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     CHECK(cudaFree(d_new_P));
 }
 
-__global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandState *rngStates) {
+__global__ void move_particles_kernel(Particle *P, int NP, curandState *rngStates) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
@@ -294,18 +270,20 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
     double X0 = P[i].x;
     double Y0 = P[i].y;
     double Z0 = P[i].z;
-    P[i].x += conf->dt * P[i].vx;
-    P[i].y += conf->dt * P[i].vy;
-    P[i].z += conf->dt * P[i].vz;
+    P[i].x += d_conf.dt * P[i].vx;
+    P[i].y += d_conf.dt * P[i].vy;
+    P[i].z += d_conf.dt * P[i].vz;
+
+    curandState rngState = rngStates[i];
 
 
     #ifdef WING_CASE
-    double dt = conf->dt;
-    double moleculeMass = conf->moleculeMass;
-    double Tw = conf->Tw;
-    double WingX = conf->WingX;
-    double WingY = conf->WingY;
-    double WingLength = conf->WingLength;
+    double dt = d_conf.dt;
+    double moleculeMass = d_conf.moleculeMass;
+    double Tw = d_conf.Tw;
+    double WingX = d_conf.WingX;
+    double WingY = d_conf.WingY;
+    double WingLength = d_conf.WingLength;
 
     if ( ( Y0 - WingY ) * ( P[i].y - WingY ) < 0.0 ) {
         // Linear interpolation to point Y = WingY
@@ -320,8 +298,8 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
             diffuse_scattering_y_device(
                 &(P[i].vx), &(P[i].vy), &(P[i].vz), 
                 moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
-                conf->KB,
-                &rngStates[i]
+                d_conf.KB,
+                &rngState
             );
             // Move the reflected molecule
             P[i].x = Xw + Dt1 * P[i].vx;
@@ -341,10 +319,10 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
         double dz = z1 - z0;
 
         // Sphere center
-        double cx = conf->ballCenterX;
-        double cy = conf->ballCenterY;
-        double cz = conf->ballCenterZ;
-        double ballRadius = conf->ballRadius;
+        double cx = d_conf.ballCenterX;
+        double cy = d_conf.ballCenterY;
+        double cz = d_conf.ballCenterZ;
+        double ballRadius = d_conf.ballRadius;
 
         // Shifted initial position
         double rx = x0 - cx;
@@ -377,7 +355,7 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
                 double Zw = z0 + t_hit * dz;
 
                 // Remaining time after collision
-                double Dt1 = conf->dt * (1.0 - t_hit);
+                double Dt1 = d_conf.dt * (1.0 - t_hit);
 
                 // Surface normal (outward)
                 double nx = (Xw - cx) / ballRadius;
@@ -386,9 +364,9 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
 
                 // Diffuse reflection aligned with normal
                 diffuse_scattering_device(&(P[i].vx), &(P[i].vy), &(P[i].vz),
-                                conf->moleculeMass, conf->Tb,
-                                nx, ny, nz, conf->KB,
-                                &rngStates[i]
+                                d_conf.moleculeMass, d_conf.Tb,
+                                nx, ny, nz, d_conf.KB,
+                                &rngState
                             );
 
                 // Move after collision
@@ -401,14 +379,15 @@ __global__ void move_particles_kernel(Particle *P, Config *conf, int NP, curandS
 
     #endif
 
+    rngStates[i] = rngState;
 }
 
 void move_particles(Simulation *sim) {
-    int threads = 256;
+    int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->d_conf, sim->NP, sim->rngStates);
+    move_particles_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->NP, sim->rngStates);
     CHECK_KERNELCALL();
 }
 
@@ -443,7 +422,7 @@ __global__ void accumulate_sampling_kernel(
 void accumulate_sampling(Simulation *sim) {
     sim->sampleSteps++;
 
-    dim3 threadsPerBlock(8, 8, 8);
+    dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
         (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
@@ -461,7 +440,6 @@ void clearPointers(Simulation *sim) {
     free(sim->P);
     free(sim->samples);
 
-    CHECK(cudaFree(sim->d_conf));
     CHECK(cudaFree(sim->rngStates));
     CHECK(cudaFree(sim->d_P));
     CHECK(cudaFree(sim->d_samples));
