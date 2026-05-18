@@ -41,7 +41,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
         if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
             NPC = cellCount[cell_idx];
-            fprintf(stderr, "Block (%d, %d, %d) has NPC = %d\n", blockIdx.x, blockIdx.y, blockIdx.z, NPC);
+            printf("Block (%d, %d, %d) has NPC = %d\n", blockIdx.x, blockIdx.y, blockIdx.z, NPC);
             N_x = (NPC % 2 == 0) ? NPC - 1 : NPC;
         }
         __syncthreads();
