@@ -129,7 +129,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 }
 
 void collide_particles_hss(Simulation *sim) {
-    dim3 threadsPerBlock(2, 2, 2);
+    dim3 threadsPerBlock(4, 4, 2);
     dim3 blocksPerGrid(NX, NY, NZ);
 
     hss_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
