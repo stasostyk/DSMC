@@ -45,7 +45,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
 
 
-        if (NPC < 400) return;
+        if (NPC < 300) return;
 
         int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockDim.x * blockDim.y * blockDim.z + tid;
         curandState rngState = rngStates[rngIdx];
