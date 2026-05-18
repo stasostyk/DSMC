@@ -59,7 +59,7 @@ int main(void) {
         apply_boundary_conditions_free_stream(&sim);
         index_particles(&sim);
         
-        collide_particles(&sim);
+        collide_particles_hss(&sim);
 
         if (step >= conf.firstSampleStep && step % conf.samplingPeriod == 0) {
             accumulate_sampling(&sim);
