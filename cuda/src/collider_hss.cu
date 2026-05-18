@@ -7,6 +7,7 @@
 #include <math.h>
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
+#include <cstdio>
 
 __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                                   Particles P,
@@ -40,11 +41,14 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
         if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
             NPC = cellCount[cell_idx];
+            fprintf(stderr, "Block (%d, %d, %d) has NPC = %d\n", blockIdx.x, blockIdx.y, blockIdx.z, NPC);
             N_x = (NPC % 2 == 0) ? NPC - 1 : NPC;
         }
         __syncthreads();
 
-        return;
+
+
+        if (NPC < 64) return;
 
         int nPairs = NPC / 2;
         int offset = (NPC + 1) / 2;
