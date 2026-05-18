@@ -42,6 +42,8 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
             NPC = cellCount[cell_idx];
             N_x = (NPC % 2 == 0) ? NPC - 1 : NPC;
         }
+        __syncthreads()
+
         int nPairs = NPC / 2;
         int offset = (NPC + 1) / 2;
         for (int i = tid; i < NPC; i += blockSize) {
