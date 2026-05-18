@@ -90,7 +90,7 @@ void config_setup(Config *config) {
     config->ntcs_collisionProbExponent = 2.0*config->omega - 1.0;
     config->ntcs_collisionProbMultiplier = pow(config->CrRef, config->ntcs_collisionProbExponent) * config->sigmaRef / majorant;
 
-    config->hss_nbatch = 10;
+    config->hss_nbatch = 1;
     config->hss_collisionProbMultiplier = (1.0/config->hss_nbatch) * config->weight * config->sigmaRef * config->dt / config->cellVolume;
 
     config->generation_derivatedMultiplier = sqrt(config->KB * config->TFree / config->moleculeMass);
