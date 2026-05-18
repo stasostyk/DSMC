@@ -1,8 +1,9 @@
-//
-// Created by sosty on 18/05/2026.
-//
+#ifndef DSMC_COLLIDER_HSS_H
+#define DSMC_COLLIDER_HSS_H
 
-#ifndef DSMC_COLLIDER_HSS_CUH
-#define DSMC_COLLIDER_HSS_CUH
+#include "config.h"
+#include "simulation.h"
 
-#endif //DSMC_COLLIDER_HSS_CUH
+void collide_particles_hss(Simulation *sim);
+
+#endif //DSMC_COLLIDER_HSS_H
