@@ -27,12 +27,9 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
             threadIdx.z;
 
     collisionsBlock[tid] = 0;
-    __syncthreads();
 
     if (blockIdx.x < NX && blockIdx.y < NY && blockIdx.z < NZ) {
-        int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockDim.x * blockDim.y * blockDim.z + tid;
         int cell_idx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z);
-        curandState rngState = rngStates[rngIdx];
 
 //    1. generate local particle index list (we can use cellList)
 //    2. pair the particles first half and second half
@@ -41,14 +38,17 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
         if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
             NPC = cellCount[cell_idx];
-            printf("Block (%d, %d, %d) has NPC = %d\n", blockIdx.x, blockIdx.y, blockIdx.z, NPC);
+//            printf("Block (%d, %d, %d) has NPC = %d\n", blockIdx.x, blockIdx.y, blockIdx.z, NPC);
             N_x = (NPC % 2 == 0) ? NPC - 1 : NPC;
         }
         __syncthreads();
 
 
 
-        if (NPC < 64) return;
+        if (NPC < 128) return;
+
+        int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockDim.x * blockDim.y * blockDim.z + tid;
+        curandState rngState = rngStates[rngIdx];
 
         int nPairs = NPC / 2;
         int offset = (NPC + 1) / 2;
@@ -112,6 +112,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                 }
 
             }
+            __syncthreads();
         }
         rngStates[rngIdx] = rngState;
     }
