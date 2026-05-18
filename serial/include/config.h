@@ -7,15 +7,6 @@
 #define NY 10
 #define NZ 10
 
-<<<<<<<< HEAD:serial/include/config.h
-========
-// TODO calculate once these constants
-#define PARTICLES_SZ (MAX_PARTICLES * sizeof(Particle))
-#define SAMPLES_SZ (NX * NY * NZ * sizeof(Cell))
-#define CELL_COUNT_SZ (NX * NY * NZ * sizeof(int))
-#define CELL_LIST_SZ (NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int))
-
->>>>>>>> main:cuda/include/config.h
 typedef struct {
     double KB;
     double NA;
