@@ -45,10 +45,8 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
 
 
-        if (NPC < 400) {
-            printf("SWITCHING TO NTC");
-            return;
-        }
+        if (NPC < 400) return;
+        printf("Performing HSS");
 
         int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockDim.x * blockDim.y * blockDim.z + tid;
         curandState rngState = rngStates[rngIdx];
