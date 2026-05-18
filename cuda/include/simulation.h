@@ -47,16 +47,10 @@ typedef struct {
 
 void setup(Simulation *sim, Config *conf);
 void index_particles(Simulation *sim);
-<<<<<<< HEAD
 void initialize_particles(Simulation *sim);
 void apply_boundary_conditions_free_stream(Simulation *sim);
 void move_particles(Simulation *sim);
-=======
-void initialize_particles(Simulation *sim, Config *conf);
-void apply_boundary_conditions_free_stream(Simulation *sim, Config *conf);
-void move_particles(Simulation *sim, Config *conf);
->>>>>>> main
 void accumulate_sampling(Simulation *sim);
 void clearPointers(Simulation *sim);
 
-#endif // SIMULATION_H
+#endif // SIMULATION_Hvo
