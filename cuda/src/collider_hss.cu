@@ -44,7 +44,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         }
         __syncthreads();
 
-        if (NPC < 2) return;
+        if (NPC < 64) return;
 
         int nPairs = NPC / 2;
         int offset = (NPC + 1) / 2;
@@ -56,17 +56,17 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
         for (int b = 0; b < d_conf.hss_nbatch; b++) {
             //                5. fisher-yates shuffle
-//            if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
-//                for (int i = 0; i < NPC; i++) {
-//                    int j = i + (int) (curand_uniform(&rngState) * (NPC - i));
-//                    if (j < NPC) {
-//                        int temp = localParticleList[i];
-//                        localParticleList[i] = localParticleList[j];
-//                        localParticleList[j] = temp;
-//                    }
-//                }
-//            }
-//            __syncthreads();
+            if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
+                for (int i = 0; i < NPC; i++) {
+                    int j = i + (int) (curand_uniform(&rngState) * (NPC - i));
+                    if (j < NPC) {
+                        int temp = localParticleList[i];
+                        localParticleList[i] = localParticleList[j];
+                        localParticleList[j] = temp;
+                    }
+                }
+            }
+            __syncthreads();
 
             for (int i = tid; i < nPairs; i += blockSize) {
                 int j = i + offset;
@@ -108,7 +108,6 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                 }
 
             }
-            __syncthreads();
         }
         rngStates[rngIdx] = rngState;
     }
