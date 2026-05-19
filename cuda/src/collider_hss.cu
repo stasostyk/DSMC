@@ -14,17 +14,14 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                                   int *cellCount,
                                   int *cellList,
                                   curandState *rngStates) {
-    __shared__ int collisionsBlock[32];
+    __shared__ int collisionsBlock[128];
     __shared__ int localParticleList[MAX_PARTICLES_PER_CELL];
     __shared__ int NPC;
     __shared__ int N_x;
 
-    int blockSize = blockDim.x * blockDim.y * blockDim.z;
+    int blockSize = blockDim.x;
 
-    int tid =
-            threadIdx.x * blockDim.y * blockDim.z +
-            threadIdx.y * blockDim.z +
-            threadIdx.z;
+    int tid = threadIdx.x;
 
     collisionsBlock[tid] = 0;
 
@@ -36,7 +33,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 //    3. collide all pairs
 
 
-        if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
+        if (threadIdx.x == 0) {
             NPC = cellCount[cell_idx];
 //            printf("Block (%d, %d, %d) has NPC = %d\n", blockIdx.x, blockIdx.y, blockIdx.z, NPC);
             N_x = (NPC % 2 == 0) ? NPC - 1 : NPC;
@@ -47,8 +44,8 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
 //        if (NPC < d_conf.hss_threshold) return;
 
-//        int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockDim.x * blockDim.y * blockDim.z + tid;
-//        curandState rngState = rngStates[rngIdx];
+        int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockSize + tid;
+        curandState rngState = rngStates[rngIdx];
 
         int nPairs = NPC / 2;
         int offset = (NPC + 1) / 2;
@@ -60,16 +57,16 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
         for (int b = 0; b < d_conf.hss_nbatch; b++) {
             //                5. fisher-yates shuffle
-//            if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0) {
-//                for (int i = 0; i < NPC; i++) {
-//                    int j = i + (int) (curand_uniform(&rngState) * (NPC - i));
-//                    if (j < NPC) {
-//                        int temp = localParticleList[i];
-//                        localParticleList[i] = localParticleList[j];
-//                        localParticleList[j] = temp;
-//                    }
-//                }
-//            }
+            if (threadIdx.x == 0) {
+                for (int i = 0; i < NPC; i++) {
+                    int j = i + (int) (curand_uniform(&rngState) * (NPC - i));
+                    if (j < NPC) {
+                        int temp = localParticleList[i];
+                        localParticleList[i] = localParticleList[j];
+                        localParticleList[j] = temp;
+                    }
+                }
+            }
             __syncthreads();
 
             for (int i = tid; i < nPairs; i += blockSize) {
@@ -93,11 +90,10 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
 
                     double prob = d_conf.hss_collisionProbMultiplier * N_x * relativeSpeed;
-//                    if (curand_uniform(&rngState) < prob) {
-                    if (0.0 < prob) {
+                    if (curand_uniform(&rngState) < prob) {
                         //                    4. collide
-                        double N[3] = {1.0, 0.0, 0.0};
-//                        random_isotropic_vector_device(N, &rngState);
+                        double N[3];
+                        random_isotropic_vector_device(N, &rngState);
                         relativeSpeed *= 0.5;
                         double VC[3] = {0.5 * (vx_j + vx_i), 0.5 * (vy_j + vy_i), 0.5 * (vz_j + vz_i)};
                         double VCr[3] = {relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2]};
@@ -115,7 +111,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
             }
             __syncthreads();
         }
-//        rngStates[rngIdx] = rngState;
+        rngStates[rngIdx] = rngState;
     }
 
     __syncthreads();
@@ -135,7 +131,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 }
 
 void collide_particles_hss(Simulation *sim) {
-    dim3 threadsPerBlock(4, 4, 2);
+    dim3 threadsPerBlock(128);
     dim3 blocksPerGrid(NX, NY, NZ);
 
     hss_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
