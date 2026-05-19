@@ -42,7 +42,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
 
 
-//        if (NPC < d_conf.hss_threshold) return;
+        if (NPC < d_conf.hss_threshold+1000) return;
 
         int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockSize + tid;
         curandState rngState = rngStates[rngIdx];
@@ -125,13 +125,13 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         __syncthreads();
     }
 
-//    if (tid == 0) {
-//        atomicAdd(total_collisions, (unsigned long long)collisionsBlock[0]);
-//    }
+    if (tid == 0) {
+        atomicAdd(total_collisions, (unsigned long long)collisionsBlock[0]);
+    }
 }
 
 void collide_particles_hss(Simulation *sim) {
-    dim3 threadsPerBlock(128);
+    dim3 threadsPerBlock(64);
     dim3 blocksPerGrid(NX, NY, NZ);
 
     hss_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
