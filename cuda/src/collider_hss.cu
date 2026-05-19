@@ -125,9 +125,9 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         __syncthreads();
     }
 
-    if (tid == 0) {
-        atomicAdd(total_collisions, (unsigned long long)collisionsBlock[0]);
-    }
+//    if (tid == 0) {
+//        atomicAdd(total_collisions, (unsigned long long)collisionsBlock[0]);
+//    }
 }
 
 void collide_particles_hss(Simulation *sim) {
