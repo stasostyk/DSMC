@@ -28,19 +28,11 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
     if (blockIdx.x < NX && blockIdx.y < NY && blockIdx.z < NZ) {
         int cell_idx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z);
 
-//    1. generate local particle index list (we can use cellList)
-//    2. pair the particles first half and second half
-//    3. collide all pairs
-
-
         if (threadIdx.x == 0) {
             NPC = cellCount[cell_idx];
-//            printf("Block (%d, %d, %d) has NPC = %d\n", blockIdx.x, blockIdx.y, blockIdx.z, NPC);
             N_x = (NPC % 2 == 0) ? NPC - 1 : NPC;
         }
         __syncthreads();
-
-
 
         if (NPC < d_conf.hss_threshold) return;
 
@@ -56,7 +48,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         __syncthreads();
 
         for (int b = 0; b < d_conf.hss_nbatch; b++) {
-            //                5. fisher-yates shuffle
+            // fisher-yates shuffle (could be optimized with parallel sorting of random keys)
             if (threadIdx.x == 0) {
                 for (int i = 0; i < NPC; i++) {
                     int j = i + (int) (curand_uniform(&rngState) * (NPC - i));
