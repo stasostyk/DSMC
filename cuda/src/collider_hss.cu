@@ -14,7 +14,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                                   int *cellCount,
                                   int *cellList,
                                   curandState *rngStates) {
-    __shared__ int collisionsBlock[128];
+    __shared__ int collisionsBlock[64];
     __shared__ int localParticleList[MAX_PARTICLES_PER_CELL];
     __shared__ int NPC;
     __shared__ int N_x;
