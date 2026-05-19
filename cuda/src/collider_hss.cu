@@ -47,8 +47,8 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
 //        if (NPC < d_conf.hss_threshold) return;
 
-        int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockDim.x * blockDim.y * blockDim.z + tid;
-        curandState rngState = rngStates[rngIdx];
+//        int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockDim.x * blockDim.y * blockDim.z + tid;
+//        curandState rngState = rngStates[rngIdx];
 
         int nPairs = NPC / 2;
         int offset = (NPC + 1) / 2;
@@ -93,10 +93,12 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
 
                     double prob = d_conf.hss_collisionProbMultiplier * N_x * relativeSpeed;
-                    if (curand_uniform(&rngState) < prob) {
+//                    if (curand_uniform(&rngState) < prob) {
+                    if (0.0 < prob) {
                         //                    4. collide
                         double N[3];
-                        random_isotropic_vector_device(N, &rngState);
+//                        random_isotropic_vector_device(N, &rngState);
+                        N = {1.0, 1.0, 1.0};
                         relativeSpeed *= 0.5;
                         double VC[3] = {0.5 * (vx_j + vx_i), 0.5 * (vy_j + vy_i), 0.5 * (vz_j + vz_i)};
                         double VCr[3] = {relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2]};
@@ -114,7 +116,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
             }
             __syncthreads();
         }
-        rngStates[rngIdx] = rngState;
+//        rngStates[rngIdx] = rngState;
     }
 
     __syncthreads();
