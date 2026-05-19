@@ -96,9 +96,8 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 //                    if (curand_uniform(&rngState) < prob) {
                     if (0.0 < prob) {
                         //                    4. collide
-                        double N[3];
+                        double N[3] = {1.0, 0.0, 0.0};
 //                        random_isotropic_vector_device(N, &rngState);
-                        N = {1.0, 1.0, 1.0};
                         relativeSpeed *= 0.5;
                         double VC[3] = {0.5 * (vx_j + vx_i), 0.5 * (vy_j + vy_i), 0.5 * (vz_j + vz_i)};
                         double VCr[3] = {relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2]};
