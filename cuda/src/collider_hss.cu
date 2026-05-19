@@ -67,21 +67,21 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                     int i_global = localParticleList[i];
                     int j_global = localParticleList[j];
 
-                    double vx_i = P.vx[i_global];
-                    double vy_i = P.vy[i_global];
-                    double vz_i = P.vz[i_global];
+                    float vx_i = P.vx[i_global];
+                    float vy_i = P.vy[i_global];
+                    float vz_i = P.vz[i_global];
 
-                    double vx_j = P.vx[j_global];
-                    double vy_j = P.vy[j_global];
-                    double vz_j = P.vz[j_global];
+                    float vx_j = P.vx[j_global];
+                    float vy_j = P.vy[j_global];
+                    float vz_j = P.vz[j_global];
 
-                    double relativeVel[3] = {vx_j - vx_i, vy_j - vy_i, vz_j - vz_i};
-                    double relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
+                    float relativeVel[3] = {vx_j - vx_i, vy_j - vy_i, vz_j - vz_i};
+                    float relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
                                                 + relativeVel[1] * relativeVel[1]
                                                 + relativeVel[2] * relativeVel[2]);
 
 
-                    double prob = d_conf.hss_collisionProbMultiplier * N_x * relativeSpeed;
+                    float prob = d_conf.hss_collisionProbMultiplier * N_x * relativeSpeed;
                     if (curand_uniform(&rngState) < prob) {
                         //                    4. collide
                         double N[3];

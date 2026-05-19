@@ -22,30 +22,30 @@ void setup(Simulation *sim, Config *conf) {
     CHECK(cudaMemcpyToSymbol(d_conf, conf, sizeof(Config)));
 
     // initialize the SoA
-    sim->P.x = (double *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.y = (double *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.z = (double *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.vx = (double *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.vy = (double *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.vz = (double *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.x = (float *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.y = (float *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.z = (float *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.vx = (float *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.vy = (float *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.vz = (float *)malloc(PARTICLES_FIELD_SZ);
 
     sim->samples = (Cell *)malloc(SAMPLES_SZ);
 
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
 //  device SoA for particles
-    CHECK(cudaMalloc(&sim->d_P.x,  MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_P.y,  MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_P.z,  MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_P.vx, MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_P.vy, MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_P.vz, MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_P.x,  MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_P.y,  MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_P.z,  MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_P.vx, MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_P.vy, MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_P.vz, MAX_PARTICLES * sizeof(float)));
 //  device SoA for new particles
-    CHECK(cudaMalloc(&sim->d_new_P.x,  MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_new_P.y,  MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_new_P.z,  MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_new_P.vx, MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_new_P.vy, MAX_PARTICLES * sizeof(double)));
-    CHECK(cudaMalloc(&sim->d_new_P.vz, MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_new_P.x,  MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_new_P.y,  MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_new_P.z,  MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_new_P.vx, MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_new_P.vy, MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_new_P.vz, MAX_PARTICLES * sizeof(float)));
 
     CHECK(cudaMalloc(&sim->d_samples, SAMPLES_SZ));
     CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));
@@ -137,9 +137,9 @@ __global__ void generate_particles_in_rect_kernel(
     Particles P,
     int start,
     int Nnew,
-    double x1, double x2, 
-    double y1, double y2,
-    double z1, double z2,
+    float x1, float x2,
+    float y1, float y2,
+    float z1, float z2,
     int moveFlag,
     curandState *rngStates
 ) {
@@ -148,7 +148,7 @@ __global__ void generate_particles_in_rect_kernel(
 
     double ux = d_conf.UxFree;
     double uy = d_conf.UyFree;
-    double uz = d_conf.UzFree; 
+    double uz = d_conf.UzFree;
     double dt = d_conf.dt;
 
     int idx = start + i;
@@ -184,9 +184,9 @@ __global__ void generate_particles_in_rect_kernel(
 
 void generate_particles_in_rect(
     Simulation *sim,
-    double x1, double x2,
-    double y1, double y2,
-    double z1, double z2,
+    float x1, float x2,
+    float y1, float y2,
+    float z1, float z2,
     int moveFlag
 ) {
     double ngas = sim->conf->NFree;
@@ -230,14 +230,14 @@ __global__ void filter_particles_inside_ball(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    double cx = d_conf.ballCenterX;
-    double cy = d_conf.ballCenterY;
-    double cz = d_conf.ballCenterZ;
-    double R2 = d_conf.ballRadiusSquared;
+    float cx = d_conf.ballCenterX;
+    float cy = d_conf.ballCenterY;
+    float cz = d_conf.ballCenterZ;
+    float R2 = d_conf.ballRadiusSquared;
 
-    double rx = P.x[i] - cx;
-    double ry = P.y[i] - cy;
-    double rz = P.z[i] - cz;
+    float rx = P.x[i] - cx;
+    float ry = P.y[i] - cy;
+    float rz = P.z[i] - cz;
 
     // check if particle valid
     if (rx*rx + ry*ry + rz*rz > R2) {
@@ -359,9 +359,9 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
 
     // TODO a lot of calls to global memory P[i], probably would be better to save to local
 
-    double X0 = P.x[i];
-    double Y0 = P.y[i];
-    double Z0 = P.z[i];
+    float X0 = P.x[i];
+    float Y0 = P.y[i];
+    float Z0 = P.z[i];
     P.x[i] += d_conf.dt * P.vx[i];
     P.y[i] += d_conf.dt * P.vy[i];
     P.z[i] += d_conf.dt * P.vz[i];
@@ -370,22 +370,22 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
 
 
     #ifdef WING_CASE
-    double dt = d_conf.dt;
+    float dt = d_conf.dt;
     double moleculeMass = d_conf.moleculeMass;
     double Tw = d_conf.Tw;
-    double WingX = d_conf.WingX;
-    double WingY = d_conf.WingY;
-    double WingLength = d_conf.WingLength;
+    float WingX = d_conf.WingX;
+    float WingY = d_conf.WingY;
+    float WingLength = d_conf.WingLength;
 
     if ( ( Y0 - WingY ) * ( P.y[i] - WingY ) < 0.0 ) {
         // Linear interpolation to point Y = WingY
-        double Xw=( X0*(WingY-P.y[i])+P.x[i]*(Y0-WingY))/(Y0-P.y[i]);
-        double Zw=( Z0*(WingY-P.y[i])+P.z[i]*(Y0-WingY))/(Y0-P.y[i]);
+        float Xw=( X0*(WingY-P.y[i])+P.x[i]*(Y0-WingY))/(Y0-P.y[i]);
+        float Zw=( Z0*(WingY-P.y[i])+P.z[i]*(Y0-WingY))/(Y0-P.y[i]);
         if ( Zw < 0.3 || Zw > 0.7 ) return; // wing only occupies 0.3 < z < 0.7
         if ( Xw > WingX && Xw < WingX + WingLength ) {
             // Molecule interacts with the wing during the time step
             // Linear interpolation of the time of scattering, Eq. (6.5.4)
-            double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P.y[i] );
+            float Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P.y[i] );
             // Generate velocity vector of the reflected molecule
             diffuse_scattering_y_device(
                 &(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
@@ -402,57 +402,57 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
     // Ray-sphere intersection test
     {
         // Initial and final positions
-        double x0 = X0, y0 = Y0, z0 = Z0;
-        double x1 = P.x[i], y1 = P.y[i], z1 = P.z[i];
+        float x0 = X0, y0 = Y0, z0 = Z0;
+        float x1 = P.x[i], y1 = P.y[i], z1 = P.z[i];
 
         // Direction of motion
-        double dx = x1 - x0;
-        double dy = y1 - y0;
-        double dz = z1 - z0;
+        float dx = x1 - x0;
+        float dy = y1 - y0;
+        float dz = z1 - z0;
 
         // Sphere center
-        double cx = d_conf.ballCenterX;
-        double cy = d_conf.ballCenterY;
-        double cz = d_conf.ballCenterZ;
-        double ballRadius = d_conf.ballRadius;
+        float cx = d_conf.ballCenterX;
+        float cy = d_conf.ballCenterY;
+        float cz = d_conf.ballCenterZ;
+        float ballRadius = d_conf.ballRadius;
 
         // Shifted initial position
-        double rx = x0 - cx;
-        double ry = y0 - cy;
-        double rz = z0 - cz;
+        float rx = x0 - cx;
+        float ry = y0 - cy;
+        float rz = z0 - cz;
 
         // Quadratic coefficients: |r + t d|^2 = R^2
-        double a = dx*dx + dy*dy + dz*dz;
-        double b = 2.0 * (rx*dx + ry*dy + rz*dz);
-        double c = rx*rx + ry*ry + rz*rz - ballRadius*ballRadius;
+        float a = dx*dx + dy*dy + dz*dz;
+        float b = 2.0 * (rx*dx + ry*dy + rz*dz);
+        float c = rx*rx + ry*ry + rz*rz - ballRadius*ballRadius;
 
-        double disc = b*b - 4.0*a*c;
+        float disc = b*b - 4.0*a*c;
 
         if (disc >= 0.0) {
-            double sqrt_disc = sqrt(disc);
+            float sqrt_disc = sqrt(disc);
 
             // time solutions
-            double t1 = (-b - sqrt_disc) / (2.0*a);
-            double t2 = (-b + sqrt_disc) / (2.0*a);
+            float t1 = (-b - sqrt_disc) / (2.0*a);
+            float t2 = (-b + sqrt_disc) / (2.0*a);
 
             // pick earliest valid intersection in [0,1]
-            double t_hit = -1.0;
+            float t_hit = -1.0;
             if (t1 >= 0.0 && t1 <= 1.0) t_hit = t1;
             else if (t2 >= 0.0 && t2 <= 1.0) t_hit = t2;
 
             if (t_hit >= 0.0) {
                 // Intersection point
-                double Xw = x0 + t_hit * dx;
-                double Yw = y0 + t_hit * dy;
-                double Zw = z0 + t_hit * dz;
+                float Xw = x0 + t_hit * dx;
+                float Yw = y0 + t_hit * dy;
+                float Zw = z0 + t_hit * dz;
 
                 // Remaining time after collision
-                double Dt1 = d_conf.dt * (1.0 - t_hit);
+                float Dt1 = d_conf.dt * (1.0 - t_hit);
 
                 // Surface normal (outward)
-                double nx = (Xw - cx) / ballRadius;
-                double ny = (Yw - cy) / ballRadius;
-                double nz = (Zw - cz) / ballRadius;
+                float nx = (Xw - cx) / ballRadius;
+                float ny = (Yw - cy) / ballRadius;
+                float nz = (Zw - cz) / ballRadius;
 
                 // Diffuse reflection aligned with normal
                 diffuse_scattering_device(&(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
@@ -499,9 +499,9 @@ __global__ void accumulate_sampling_kernel(
     for (int q = 0; q < Nc; q++) {
         int i = cellList[IDX_LIST(k, l, m, q)];
 
-        double vx = P.vx[i];
-        double vy = P.vy[i];
-        double vz = P.vz[i];
+        float vx = P.vx[i];
+        float vy = P.vy[i];
+        float vz = P.vz[i];
 
         samples[IDX_CELL(k, l, m)].countVx += vx;
         samples[IDX_CELL(k, l, m)].countVy += vy;

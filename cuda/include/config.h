@@ -28,7 +28,7 @@ typedef struct {
     double molarMass;
 
     // simulation loop parameters
-    double dt;
+    float dt;
     int nSteps;
     int printPeriod;
     int particlesPerCellTarget;
@@ -37,25 +37,25 @@ typedef struct {
 
     #ifdef WING_CASE
         // wing
-        double WingX;
-        double WingY;
-        double WingLength;
+        float WingX;
+        float WingY;
+        float WingLength;
         double Tw;
 
         // stream
         double MaFree;
         double PFree;
         double TFree;
-        double angleOfAttack;
+        float angleOfAttack;
     #elif defined(BALL_CASE)
         // ball 
-        double ballCenterX;
-        double ballCenterY;
-        double ballCenterZ;
-        double ballRadius;
+        float ballCenterX;
+        float ballCenterY;
+        float ballCenterZ;
+        float ballRadius;
         double Tb;
 
-        double ballRadiusSquared; // derived
+        float ballRadiusSquared; // derived
 
         // stream
         double MaFree;

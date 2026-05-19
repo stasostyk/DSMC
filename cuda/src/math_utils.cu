@@ -67,7 +67,7 @@ double rayleigh_device(double sigma, curandState *rngState) {
 
 __device__
 void diffuse_scattering_y_device(
-    double *vx, double *vy, double *vz, double m, double T, double Ny, double KB,
+    float *vx, float *vy, float *vz, double m, double T, double Ny, double KB,
     curandState *rngState
 ) {
     double2 r = curand_normal2_double(rngState);
@@ -79,7 +79,7 @@ void diffuse_scattering_y_device(
     *vy = Ny * rayleigh_device(RT, rngState);
 }
 
-void diffuse_scattering_y(double *vx, double *vy, double *vz, double m, double T, double Ny, double KB) {
+void diffuse_scattering_y(float *vx, float *vy, float *vz, double m, double T, double Ny, double KB) {
     double RT = sqrt(KB * T / m);
 
     *vx = randn(0.0, RT);
@@ -88,7 +88,7 @@ void diffuse_scattering_y(double *vx, double *vy, double *vz, double m, double T
 }
 
 void diffuse_scattering(
-    double *vx, double *vy, double *vz, 
+    float *vx, float *vy, float *vz,
     double m, double T, 
     double nx, double ny, double nz,
     double KB
@@ -139,7 +139,7 @@ void diffuse_scattering(
 
 __device__
 void diffuse_scattering_device(
-    double *vx, double *vy, double *vz, 
+    float *vx, float *vy, float *vz,
     double m, double T, 
     double nx, double ny, double nz,
     double KB,

@@ -29,7 +29,7 @@ __global__ void no_time_counter_scheme_kernel(
             curandState rngState = rngStates[idx];
 
             // estimate number of collisions
-            double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
+            float estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
             int expectedCollidingPairs = (int)estimatedCollidingPairs;
             if (curand_uniform(&rngState) < estimatedCollidingPairs - expectedCollidingPairs) expectedCollidingPairs++;
 
@@ -45,16 +45,16 @@ __global__ void no_time_counter_scheme_kernel(
                 int i = IPC[i_local];
                 int j = IPC[j_local];
 
-                double vx_i = P.vx[i];
-                double vy_i = P.vy[i];
-                double vz_i = P.vz[i];
+                float vx_i = P.vx[i];
+                float vy_i = P.vy[i];
+                float vz_i = P.vz[i];
 
-                double vx_j = P.vx[j];
-                double vy_j = P.vy[j];
-                double vz_j = P.vz[j];
+                float vx_j = P.vx[j];
+                float vy_j = P.vy[j];
+                float vz_j = P.vz[j];
 
-                double relativeVel[3] = { vx_j - vx_i, vy_j - vy_i, vz_j - vz_i };
-                double relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
+                float relativeVel[3] = { vx_j - vx_i, vy_j - vy_i, vz_j - vz_i };
+                float relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
                                             + relativeVel[1] * relativeVel[1]
                                             + relativeVel[2] * relativeVel[2]);
 

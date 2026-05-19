@@ -11,13 +11,13 @@ void random_unit_vector(double *nx, double *ny, double *nz);
 double rayleigh(double sigma);
 
 void diffuse_scattering_y(
-    double *vx, double *vy, double *vz, 
+    float *vx, float *vy, float *vz,
     double m, double T, double Ny,
     double KB
 );
 
 void diffuse_scattering(
-    double *vx, double *vy, double *vz, 
+    float *vx, float *vy, float *vz,
     double m, double T, 
     double nx, double ny, double nz,
     double KB
@@ -26,13 +26,13 @@ void diffuse_scattering(
 
 __device__
 void diffuse_scattering_y_device(
-    double *vx, double *vy, double *vz, double m, double T, double Ny, double KB,
+    float *vx, float *vy, float *vz, double m, double T, double Ny, double KB,
     curandState *rngState
 );
 
 __device__
 void diffuse_scattering_device(
-    double *vx, double *vy, double *vz, 
+    float *vx, float *vy, float *vz,
     double m, double T, 
     double nx, double ny, double nz,
     double KB,
