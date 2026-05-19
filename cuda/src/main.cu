@@ -60,7 +60,7 @@ int main(void) {
         index_particles(&sim);
         
         collide_particles_hss(&sim);
-//        collide_particles(&sim);
+        collide_particles(&sim);
 
         if (step >= conf.firstSampleStep && step % conf.samplingPeriod == 0) {
             accumulate_sampling(&sim);

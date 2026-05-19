@@ -42,7 +42,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
 
 
-        if (NPC < d_conf.hss_threshold+1000) return;
+        if (NPC < d_conf.hss_threshold) return;
 
         int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockSize + tid;
         curandState rngState = rngStates[rngIdx];
