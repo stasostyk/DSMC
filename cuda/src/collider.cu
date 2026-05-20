@@ -65,8 +65,8 @@ __global__ void no_time_counter_scheme_kernel(
                 if (curand_uniform(&rngState) < collisionProb) {
                     float N[3];
                     random_isotropic_vector_device(N, &rngState);
-                    relativeSpeed *= 0.5;
-                    float VC[3] = { 0.5 * ( vx_j + vx_i ), 0.5 * ( vy_j + vy_i ), 0.5 * ( vz_j + vz_i ) };
+                    relativeSpeed *= 0.5f;
+                    float VC[3] = { 0.5f * ( vx_j + vx_i ), 0.5f * ( vy_j + vy_i ), 0.5f * ( vz_j + vz_i ) };
                     float VCr[3] = { relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2] };
                     P.vx[i] = VC[0] + VCr[0];
                     P.vy[i] = VC[1] + VCr[1];
