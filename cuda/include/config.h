@@ -72,9 +72,9 @@ typedef struct {
     double dx, dy, dz;
     double cellVolume;
     double weight;
-    double NFree;
-    double UFree;
-    double UxFree, UyFree, UzFree;
+    float NFree;
+    float UFree;
+    float UxFree, UyFree, UzFree;
 
     // derived, used in collider
     double sigmaRef;
@@ -88,7 +88,7 @@ typedef struct {
     double hss_collisionProbMultiplier; // used in HSS scheme
 
     // derived, used in simulation
-    double generation_derivatedMultiplier;
+    float generation_derivatedMultiplier;
 } Config;
 
 extern __constant__ Config d_conf;

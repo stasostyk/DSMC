@@ -146,27 +146,27 @@ __global__ void generate_particles_in_rect_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= Nnew) return;
 
-    double ux = d_conf.UxFree;
-    double uy = d_conf.UyFree;
-    double uz = d_conf.UzFree;
-    double dt = d_conf.dt;
+    float ux = d_conf.UxFree;
+    float uy = d_conf.UyFree;
+    float uz = d_conf.UzFree;
+    float dt = d_conf.dt;
 
     int idx = start + i;
 
     curandState rngState = rngStates[idx];
 
-    double rx = curand_uniform_double(&rngState);
-    double ry = curand_uniform_double(&rngState);
-    double rz = curand_uniform_double(&rngState);
+    float rx = curand_uniform(&rngState);
+    float ry = curand_uniform(&rngState);
+    float rz = curand_uniform(&rngState);
 
     // TODO possibly better to create everything in local variable, and only then store in P?
     P.x[idx] = x1 + (x2 - x1) * rx;
     P.y[idx] = y1 + (y2 - y1) * ry;
     P.z[idx] = z1 + (z2 - z1) * rz;
 
-    double vx = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + ux;
-    double vy = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + uy;
-    double vz = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + uz;
+    float vx = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + ux;
+    float vy = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + uy;
+    float vz = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + uz;
 
     P.vx[idx] = vx;
     P.vy[idx] = vy;

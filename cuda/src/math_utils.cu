@@ -44,11 +44,11 @@ void random_isotropic_vector (double *R)
 }
 
 __device__
-void random_isotropic_vector_device (double *R, curandState *rngState)
+void random_isotropic_vector_device (float *R, curandState *rngState)
 {
-    double cosT = 1.0 - 2.0 * curand_uniform_double(rngState);
-    double sinT = sqrt (1.0 - cosT * cosT);
-    double E = 2.0 * M_PI * curand_uniform_double(rngState);
+    float cosT = 1.0 - 2.0 * curand_uniform(rngState);
+    float sinT = sqrt (1.0 - cosT * cosT);
+    float E = 2.0 * M_PI * curand_uniform(rngState);
     R[0] = cosT;
     R[1] = sinT * cos(E);
     R[2] = sinT * sin(E);

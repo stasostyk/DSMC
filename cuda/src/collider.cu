@@ -61,13 +61,13 @@ __global__ void no_time_counter_scheme_kernel(
                 // The real value to be calculated:
                 // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
                 // But, we assume omega=0.75, which lets us remove pow() in a simple way:
-                double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
+                float collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
                 if (curand_uniform(&rngState) < collisionProb) {
-                    double N[3];
+                    float N[3];
                     random_isotropic_vector_device(N, &rngState);
                     relativeSpeed *= 0.5;
-                    double VC[3] = { 0.5 * ( vx_j + vx_i ), 0.5 * ( vy_j + vy_i ), 0.5 * ( vz_j + vz_i ) };
-                    double VCr[3] = { relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2] };
+                    float VC[3] = { 0.5 * ( vx_j + vx_i ), 0.5 * ( vy_j + vy_i ), 0.5 * ( vz_j + vz_i ) };
+                    float VCr[3] = { relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2] };
                     P.vx[i] = VC[0] + VCr[0];
                     P.vy[i] = VC[1] + VCr[1];
                     P.vz[i] = VC[2] + VCr[2];
