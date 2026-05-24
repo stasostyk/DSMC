@@ -83,6 +83,10 @@ typedef struct {
     double ntcs_collidingPairsMultiplier; // used in no time collision scheme
     double ntcs_collisionProbExponent;    // used in no time collision scheme
 
+    double hss_nbatch; // used in HSS scheme
+    double hss_threshold; // used in HSS scheme
+    double hss_collisionProbMultiplier; // used in HSS scheme
+
     // derived, used in simulation
     double generation_derivatedMultiplier;
 } Config;
