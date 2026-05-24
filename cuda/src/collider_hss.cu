@@ -67,28 +67,28 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                     int i_global = localParticleList[i];
                     int j_global = localParticleList[j];
 
-                    double vx_i = P.vx[i_global];
-                    double vy_i = P.vy[i_global];
-                    double vz_i = P.vz[i_global];
+                    float vx_i = P.vx[i_global];
+                    float vy_i = P.vy[i_global];
+                    float vz_i = P.vz[i_global];
 
-                    double vx_j = P.vx[j_global];
-                    double vy_j = P.vy[j_global];
-                    double vz_j = P.vz[j_global];
+                    float vx_j = P.vx[j_global];
+                    float vy_j = P.vy[j_global];
+                    float vz_j = P.vz[j_global];
 
-                    double relativeVel[3] = {vx_j - vx_i, vy_j - vy_i, vz_j - vz_i};
-                    double relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
+                    float relativeVel[3] = {vx_j - vx_i, vy_j - vy_i, vz_j - vz_i};
+                    float relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
                                                 + relativeVel[1] * relativeVel[1]
                                                 + relativeVel[2] * relativeVel[2]);
 
 
-                    double prob = d_conf.hss_collisionProbMultiplier * N_x * relativeSpeed;
+                    float prob = d_conf.hss_collisionProbMultiplier * N_x * relativeSpeed;
                     if (curand_uniform(&rngState) < prob) {
                         //                    4. collide
-                        double N[3];
+                        float N[3];
                         random_isotropic_vector_device(N, &rngState);
-                        relativeSpeed *= 0.5;
-                        double VC[3] = {0.5 * (vx_j + vx_i), 0.5 * (vy_j + vy_i), 0.5 * (vz_j + vz_i)};
-                        double VCr[3] = {relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2]};
+                        relativeSpeed *= 0.5f;
+                        float VC[3] = {0.5f * (vx_j + vx_i), 0.5f * (vy_j + vy_i), 0.5f * (vz_j + vz_i)};
+                        float VCr[3] = {relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2]};
                         P.vx[i_global] = VC[0] + VCr[0];
                         P.vy[i_global] = VC[1] + VCr[1];
                         P.vz[i_global] = VC[2] + VCr[2];

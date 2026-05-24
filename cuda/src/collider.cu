@@ -29,7 +29,7 @@ __global__ void no_time_counter_scheme_kernel(
             curandState rngState = rngStates[idx];
 
             // estimate number of collisions
-            double estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
+            float estimatedCollidingPairs = NPC * (NPC - 1) * d_conf.ntcs_collidingPairsMultiplier;
             int expectedCollidingPairs = (int)estimatedCollidingPairs;
             if (curand_uniform(&rngState) < estimatedCollidingPairs - expectedCollidingPairs) expectedCollidingPairs++;
 
@@ -45,29 +45,29 @@ __global__ void no_time_counter_scheme_kernel(
                 int i = IPC[i_local];
                 int j = IPC[j_local];
 
-                double vx_i = P.vx[i];
-                double vy_i = P.vy[i];
-                double vz_i = P.vz[i];
+                float vx_i = P.vx[i];
+                float vy_i = P.vy[i];
+                float vz_i = P.vz[i];
 
-                double vx_j = P.vx[j];
-                double vy_j = P.vy[j];
-                double vz_j = P.vz[j];
+                float vx_j = P.vx[j];
+                float vy_j = P.vy[j];
+                float vz_j = P.vz[j];
 
-                double relativeVel[3] = { vx_j - vx_i, vy_j - vy_i, vz_j - vz_i };
-                double relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
+                float relativeVel[3] = { vx_j - vx_i, vy_j - vy_i, vz_j - vz_i };
+                float relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
                                             + relativeVel[1] * relativeVel[1]
                                             + relativeVel[2] * relativeVel[2]);
 
                 // The real value to be calculated:
                 // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
                 // But, we assume omega=0.75, which lets us remove pow() in a simple way:
-                double collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
+                float collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
                 if (curand_uniform(&rngState) < collisionProb) {
-                    double N[3];
+                    float N[3];
                     random_isotropic_vector_device(N, &rngState);
-                    relativeSpeed *= 0.5;
-                    double VC[3] = { 0.5 * ( vx_j + vx_i ), 0.5 * ( vy_j + vy_i ), 0.5 * ( vz_j + vz_i ) };
-                    double VCr[3] = { relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2] };
+                    relativeSpeed *= 0.5f;
+                    float VC[3] = { 0.5f * ( vx_j + vx_i ), 0.5f * ( vy_j + vy_i ), 0.5f * ( vz_j + vz_i ) };
+                    float VCr[3] = { relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2] };
                     P.vx[i] = VC[0] + VCr[0];
                     P.vy[i] = VC[1] + VCr[1];
                     P.vz[i] = VC[2] + VCr[2];

@@ -9,7 +9,7 @@
 #define NY 20
 #define NZ 20
 
-#define PARTICLES_FIELD_SZ (MAX_PARTICLES * sizeof(double))
+#define PARTICLES_FIELD_SZ (MAX_PARTICLES * sizeof(float))
 #define SAMPLES_SZ (NX * NY * NZ * sizeof(Cell))
 #define CELL_COUNT_SZ (NX * NY * NZ * sizeof(int))
 #define CELL_LIST_SZ (NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int))
@@ -28,7 +28,7 @@ typedef struct {
     double molarMass;
 
     // simulation loop parameters
-    double dt;
+    float dt;
     int nSteps;
     int printPeriod;
     int particlesPerCellTarget;
@@ -37,25 +37,25 @@ typedef struct {
 
     #ifdef WING_CASE
         // wing
-        double WingX;
-        double WingY;
-        double WingLength;
+        float WingX;
+        float WingY;
+        float WingLength;
         double Tw;
 
         // stream
         double MaFree;
         double PFree;
         double TFree;
-        double angleOfAttack;
+        float angleOfAttack;
     #elif defined(BALL_CASE)
         // ball 
-        double ballCenterX;
-        double ballCenterY;
-        double ballCenterZ;
-        double ballRadius;
+        float ballCenterX;
+        float ballCenterY;
+        float ballCenterZ;
+        float ballRadius;
         double Tb;
 
-        double ballRadiusSquared; // derived
+        float ballRadiusSquared; // derived
 
         // stream
         double MaFree;
@@ -72,9 +72,9 @@ typedef struct {
     double dx, dy, dz;
     double cellVolume;
     double weight;
-    double NFree;
-    double UFree;
-    double UxFree, UyFree, UzFree;
+    float NFree;
+    float UFree;
+    float UxFree, UyFree, UzFree;
 
     // derived, used in collider
     double sigmaRef;
@@ -88,7 +88,7 @@ typedef struct {
     double hss_collisionProbMultiplier; // used in HSS scheme
 
     // derived, used in simulation
-    double generation_derivatedMultiplier;
+    float generation_derivatedMultiplier;
 } Config;
 
 extern __constant__ Config d_conf;
