@@ -33,19 +33,19 @@ void setup(Simulation *sim, Config *conf) {
 
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
 //  device SoA for particles
-    CHECK(cudaMalloc(&sim->d_P.x,  MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_P.y,  MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_P.z,  MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_P.vx, MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_P.vy, MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_P.vz, MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_P.x,  PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_P.y,  PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_P.z,  PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_P.vx, PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_P.vy, PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_P.vz, PARTICLES_FIELD_SZ));
 //  device SoA for new particles
-    CHECK(cudaMalloc(&sim->d_new_P.x,  MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_new_P.y,  MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_new_P.z,  MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_new_P.vx, MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_new_P.vy, MAX_PARTICLES * sizeof(float)));
-    CHECK(cudaMalloc(&sim->d_new_P.vz, MAX_PARTICLES * sizeof(float)));
+    CHECK(cudaMalloc(&sim->d_new_P.x,  PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_new_P.y,  PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_new_P.z,  PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_new_P.vx, PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_new_P.vy, PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_new_P.vz, PARTICLES_FIELD_SZ));
 
     CHECK(cudaMalloc(&sim->d_samples, SAMPLES_SZ));
     CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));

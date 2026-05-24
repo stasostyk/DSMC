@@ -9,7 +9,7 @@
 #define NY 20
 #define NZ 20
 
-#define PARTICLES_FIELD_SZ (MAX_PARTICLES * sizeof(double))
+#define PARTICLES_FIELD_SZ (MAX_PARTICLES * sizeof(float))
 #define SAMPLES_SZ (NX * NY * NZ * sizeof(Cell))
 #define CELL_COUNT_SZ (NX * NY * NZ * sizeof(int))
 #define CELL_LIST_SZ (NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int))
