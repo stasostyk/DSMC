@@ -1,7 +1,7 @@
 #ifndef SIMULATION_H
 #define SIMULATION_H
 
-#include "particles.h"
+#include "particle.h"
 #include "cell.h"
 #include "config.h"
 
@@ -22,9 +22,9 @@ typedef struct {
     // the same particle data on CPU and keep moving data.
     // Particles in CPU are only moved to count and print global diagnostics data.
     // Similar logic applies to samples, cellCount, cellList.
-    Particles P;   // allocated in host memory (CPU)
-    Particles d_P; // allocated in device memory (GPU)
-    Particles d_new_P; // allocated in device memory(GPU), will be used as temporary storage
+    Particle *P;   // allocated in host memory (CPU)
+    Particle *d_P; // allocated in device memory (GPU)
+    Particle *d_new_P; // allocated in device memory(GPU), will be used as temporary storage
                        // when creating new particles
     Cell *samples;    // allocated in host memory (CPU)
     Cell *d_samples;  // allocated in device memory (GPU)
