@@ -21,12 +21,32 @@ void setup(Simulation *sim, Config *conf) {
     memcpy(sim->conf, conf, sizeof(Config));
     CHECK(cudaMemcpyToSymbol(d_conf, conf, sizeof(Config)));
 
-    sim->P = (Particle *)malloc(PARTICLES_SZ);
+    // initialize the SoA
+    sim->P.x = (double *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.y = (double *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.z = (double *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.vx = (double *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.vy = (double *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.vz = (double *)malloc(PARTICLES_FIELD_SZ);
+
     sim->samples = (Cell *)malloc(SAMPLES_SZ);
 
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
-    CHECK(cudaMalloc(&sim->d_P, PARTICLES_SZ));
-    CHECK(cudaMalloc(&sim->d_new_P, PARTICLES_SZ));
+//  device SoA for particles
+    CHECK(cudaMalloc(&sim->d_P.x,  MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_P.y,  MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_P.z,  MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_P.vx, MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_P.vy, MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_P.vz, MAX_PARTICLES * sizeof(double)));
+//  device SoA for new particles
+    CHECK(cudaMalloc(&sim->d_new_P.x,  MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_new_P.y,  MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_new_P.z,  MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_new_P.vx, MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_new_P.vy, MAX_PARTICLES * sizeof(double)));
+    CHECK(cudaMalloc(&sim->d_new_P.vz, MAX_PARTICLES * sizeof(double)));
+
     CHECK(cudaMalloc(&sim->d_samples, SAMPLES_SZ));
     CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));
     CHECK(cudaMalloc(&sim->d_cellList, CELL_LIST_SZ));
@@ -68,7 +88,7 @@ __global__ void reset_cell_count_kernel(int *cellCount) {
 
 // TODO dx, dy, dz could be constant memory (or in #define)
 __global__ void bin_particles_kernel(
-    Particle *P, int *cellCount, int *cellList, int NP
+    Particles P, int *cellCount, int *cellList, int NP
 ) {
     // TODO this seems like a bin pattern, could be improved
     // note: the bottleneck is the atomicAdd
@@ -76,9 +96,9 @@ __global__ void bin_particles_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    int k = (int)(P[i].x / d_conf.dx);
-    int l = (int)(P[i].y / d_conf.dy);
-    int m = (int)(P[i].z / d_conf.dz);
+    int k = (int)(P.x[i] / d_conf.dx);
+    int l = (int)(P.y[i] / d_conf.dy);
+    int m = (int)(P.z[i] / d_conf.dz);
 
     if (k < 0) k = 0;
     if (k >= NX) k = NX - 1;
@@ -114,7 +134,7 @@ void index_particles(Simulation *sim) {
 }
 
 __global__ void generate_particles_in_rect_kernel(
-    Particle *P,
+    Particles P,
     int start,
     int Nnew,
     double x1, double x2, 
@@ -140,22 +160,22 @@ __global__ void generate_particles_in_rect_kernel(
     double rz = curand_uniform_double(&rngState);
 
     // TODO possibly better to create everything in local variable, and only then store in P?
-    P[idx].x = x1 + (x2 - x1) * rx;
-    P[idx].y = y1 + (y2 - y1) * ry;
-    P[idx].z = z1 + (z2 - z1) * rz;
+    P.x[idx] = x1 + (x2 - x1) * rx;
+    P.y[idx] = y1 + (y2 - y1) * ry;
+    P.z[idx] = z1 + (z2 - z1) * rz;
 
     double vx = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + ux;
     double vy = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + uy;
     double vz = curand_normal_double(&rngState) * d_conf.generation_derivatedMultiplier + uz;
 
-    P[idx].vx = vx;
-    P[idx].vy = vy;
-    P[idx].vz = vz;
+    P.vx[idx] = vx;
+    P.vy[idx] = vy;
+    P.vz[idx] = vz;
 
     if (moveFlag) {
-        P[idx].x += dt * vx;
-        P[idx].y += dt * vy;
-        P[idx].z += dt * vz;
+        P.x[idx] += dt * vx;
+        P.y[idx] += dt * vy;
+        P.z[idx] += dt * vz;
     }
 
     rngStates[idx] = rngState;
@@ -205,7 +225,7 @@ void generate_particles_in_rect(
 // is super similar to filter_particles_out_of_bounds,
 // maybe possible to use the same one for filtering.
 __global__ void filter_particles_inside_ball(
-    Particle *P, Particle *P_out, int NP, int *new_NP
+    Particles P, Particles P_out, int NP, int *new_NP
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
@@ -215,14 +235,20 @@ __global__ void filter_particles_inside_ball(
     double cz = d_conf.ballCenterZ;
     double R2 = d_conf.ballRadiusSquared;
 
-    double rx = P[i].x - cx;
-    double ry = P[i].y - cy;
-    double rz = P[i].z - cz;
+    double rx = P.x[i] - cx;
+    double ry = P.y[i] - cy;
+    double rz = P.z[i] - cz;
 
     // check if particle valid
     if (rx*rx + ry*ry + rz*rz > R2) {
         int pos = atomicAdd(new_NP, 1);
-        P_out[pos] = P[i];
+//        P_out[pos] = P[i];
+        P_out.x[pos] = P.x[i];
+        P_out.y[pos] = P.y[i];
+        P_out.z[pos] = P.z[i];
+        P_out.vx[pos] = P.vx[i];
+        P_out.vy[pos] = P.vy[i];
+        P_out.vz[pos] = P.vz[i];
     }
 }
 
@@ -245,9 +271,9 @@ void remove_particles_inside_ball(Simulation *sim) {
     sim->NP = host_new_NP;
     
     // swap d_P and d_new_P
-    Particle *tmp = sim->d_P;
+    Particles temp = sim->d_P;
     sim->d_P = sim->d_new_P;
-    sim->d_new_P = tmp;
+    sim->d_new_P = temp;
 
     CHECK(cudaFree(d_new_NP));
 }
@@ -262,7 +288,7 @@ void initialize_particles(Simulation *sim) {
 }
 
 __global__ void filter_particles_out_of_bounds(
-    Particle *P, Particle *P_out, int NP, int *new_NP
+    Particles P, Particles P_out, int NP, int *new_NP
 ) {
     // TODO this can be possibly optimized:
     // 1st kernel: mark the particles true/false if they need to be removed
@@ -273,12 +299,19 @@ __global__ void filter_particles_out_of_bounds(
     if (i >= NP) return;
 
     // check if particle valid
-    if (P[i].x >= 0.0 && P[i].x < d_conf.Lx &&
-        P[i].y >= 0.0 && P[i].y < d_conf.Ly &&
-        P[i].z >= 0.0 && P[i].z < d_conf.Lz
+    if (P.x[i] >= 0.0 && P.x[i] < d_conf.Lx &&
+        P.y[i] >= 0.0 && P.y[i] < d_conf.Ly &&
+        P.z[i] >= 0.0 && P.z[i] < d_conf.Lz
     ) {
         int pos = atomicAdd(new_NP, 1);
-        P_out[pos] = P[i];
+//        P_out[pos] = P[i];
+        P_out.x[pos] = P.x[i];
+        P_out.y[pos] = P.y[i];
+        P_out.z[pos] = P.z[i];
+        P_out.vx[pos] = P.vx[i];
+        P_out.vy[pos] = P.vy[i];
+        P_out.vz[pos] = P.vz[i];
+
     }
 }
 
@@ -313,25 +346,25 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     sim->NP = host_new_NP;
     
     // swap d_P and d_new_P
-    Particle *tmp = sim->d_P;
+    Particles temp = sim->d_P;
     sim->d_P = sim->d_new_P;
-    sim->d_new_P = tmp;
+    sim->d_new_P = temp;
 
     CHECK(cudaFree(d_new_NP));
 }
 
-__global__ void move_particles_kernel(Particle *P, int NP, curandState *rngStates) {
+__global__ void move_particles_kernel(Particles P, int NP, curandState *rngStates) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
     // TODO a lot of calls to global memory P[i], probably would be better to save to local
 
-    double X0 = P[i].x;
-    double Y0 = P[i].y;
-    double Z0 = P[i].z;
-    P[i].x += d_conf.dt * P[i].vx;
-    P[i].y += d_conf.dt * P[i].vy;
-    P[i].z += d_conf.dt * P[i].vz;
+    double X0 = P.x[i];
+    double Y0 = P.y[i];
+    double Z0 = P.z[i];
+    P.x[i] += d_conf.dt * P.vx[i];
+    P.y[i] += d_conf.dt * P.vy[i];
+    P.z[i] += d_conf.dt * P.vz[i];
 
     curandState rngState = rngStates[i];
 
@@ -344,25 +377,25 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngState
     double WingY = d_conf.WingY;
     double WingLength = d_conf.WingLength;
 
-    if ( ( Y0 - WingY ) * ( P[i].y - WingY ) < 0.0 ) {
+    if ( ( Y0 - WingY ) * ( P.y[i] - WingY ) < 0.0 ) {
         // Linear interpolation to point Y = WingY
-        double Xw=( X0*(WingY-P[i].y)+P[i].x*(Y0-WingY))/(Y0-P[i].y);
-        double Zw=( Z0*(WingY-P[i].y)+P[i].z*(Y0-WingY))/(Y0-P[i].y);
+        double Xw=( X0*(WingY-P.y[i])+P.x[i]*(Y0-WingY))/(Y0-P.y[i]);
+        double Zw=( Z0*(WingY-P.y[i])+P.z[i]*(Y0-WingY))/(Y0-P.y[i]);
         if ( Zw < 0.3 || Zw > 0.7 ) return; // wing only occupies 0.3 < z < 0.7
         if ( Xw > WingX && Xw < WingX + WingLength ) {
             // Molecule interacts with the wing during the time step
             // Linear interpolation of the time of scattering, Eq. (6.5.4)
-            double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P[i].y );
+            double Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P.y[i] );
             // Generate velocity vector of the reflected molecule
             diffuse_scattering_y_device(
-                &(P[i].vx), &(P[i].vy), &(P[i].vz), 
+                &(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
                 moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
                 d_conf.KB,
                 &rngState
             );
             // Move the reflected molecule
-            P[i].x = Xw + Dt1 * P[i].vx;
-            P[i].y = WingY + Dt1 * P[i].vy;
+            P.x[i] = Xw + Dt1 * P.vx[i];
+            P.y[i] = WingY + Dt1 * P.vy[i];
         }
     }
     #elif defined(BALL_CASE)
@@ -370,7 +403,7 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngState
     {
         // Initial and final positions
         double x0 = X0, y0 = Y0, z0 = Z0;
-        double x1 = P[i].x, y1 = P[i].y, z1 = P[i].z;
+        double x1 = P.x[i], y1 = P.y[i], z1 = P.z[i];
 
         // Direction of motion
         double dx = x1 - x0;
@@ -422,16 +455,16 @@ __global__ void move_particles_kernel(Particle *P, int NP, curandState *rngState
                 double nz = (Zw - cz) / ballRadius;
 
                 // Diffuse reflection aligned with normal
-                diffuse_scattering_device(&(P[i].vx), &(P[i].vy), &(P[i].vz),
+                diffuse_scattering_device(&(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
                                 d_conf.moleculeMass, d_conf.Tb,
                                 nx, ny, nz, d_conf.KB,
                                 &rngState
                             );
 
                 // Move after collision
-                P[i].x = Xw + Dt1 * P[i].vx;
-                P[i].y = Yw + Dt1 * P[i].vy;
-                P[i].z = Zw + Dt1 * P[i].vz;
+                P.x[i] = Xw + Dt1 * P.vx[i];
+                P.y[i] = Yw + Dt1 * P.vy[i];
+                P.z[i] = Zw + Dt1 * P.vz[i];
             }
         }
     }
@@ -451,7 +484,7 @@ void move_particles(Simulation *sim) {
 }
 
 __global__ void accumulate_sampling_kernel(
-    int *cellCount, int *cellList, Cell *samples, Particle *P
+    int *cellCount, int *cellList, Cell *samples, Particles P
 ) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     int l = blockIdx.y * blockDim.y + threadIdx.y;
@@ -466,9 +499,9 @@ __global__ void accumulate_sampling_kernel(
     for (int q = 0; q < Nc; q++) {
         int i = cellList[IDX_LIST(k, l, m, q)];
 
-        double vx = P[i].vx;
-        double vy = P[i].vy;
-        double vz = P[i].vz;
+        double vx = P.vx[i];
+        double vy = P.vy[i];
+        double vz = P.vz[i];
 
         samples[IDX_CELL(k, l, m)].countVx += vx;
         samples[IDX_CELL(k, l, m)].countVy += vy;
@@ -496,12 +529,32 @@ void accumulate_sampling(Simulation *sim) {
 
 void clearPointers(Simulation *sim) {
     free(sim->conf);
-    free(sim->P);
+//    free(sim->P);
+    free(sim->P.x);
+    free(sim->P.y);
+    free(sim->P.z);
+    free(sim->P.vx);
+    free(sim->P.vy);
+    free(sim->P.vz);
     free(sim->samples);
 
     CHECK(cudaFree(sim->rngStates));
-    CHECK(cudaFree(sim->d_P));
-    CHECK(cudaFree(sim->d_new_P));
+
+//    CHECK(cudaFree(sim->d_P));
+    CHECK(cudaFree(sim->d_P.x));
+    CHECK(cudaFree(sim->d_P.y));
+    CHECK(cudaFree(sim->d_P.z));
+    CHECK(cudaFree(sim->d_P.vx));
+    CHECK(cudaFree(sim->d_P.vy));
+    CHECK(cudaFree(sim->d_P.vz));
+//    CHECK(cudaFree(sim->d_new_P));
+    CHECK(cudaFree(sim->d_new_P.x));
+    CHECK(cudaFree(sim->d_new_P.y));
+    CHECK(cudaFree(sim->d_new_P.z));
+    CHECK(cudaFree(sim->d_new_P.vx));
+    CHECK(cudaFree(sim->d_new_P.vy));
+    CHECK(cudaFree(sim->d_new_P.vz));
+
     CHECK(cudaFree(sim->d_samples));
     CHECK(cudaFree(sim->d_cellCount));
     CHECK(cudaFree(sim->d_cellList));
