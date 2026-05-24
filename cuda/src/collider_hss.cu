@@ -14,7 +14,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                                   int *cellCount,
                                   int *cellList,
                                   curandState *rngStates) {
-    __shared__ int collisionsBlock[128];
+    __shared__ int collisionsBlock[4];
     __shared__ int localParticleList[MAX_PARTICLES_PER_CELL];
     __shared__ int NPC;
     __shared__ int N_x;
@@ -123,7 +123,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 }
 
 void collide_particles_hss(Simulation *sim) {
-    dim3 threadsPerBlock(128);
+    dim3 threadsPerBlock(4);
     dim3 blocksPerGrid(NX, NY, NZ);
 
     hss_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
