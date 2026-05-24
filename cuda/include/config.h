@@ -3,13 +3,13 @@
 
 #include <cuda_runtime.h>
 
-#define MAX_PARTICLES 100000000
+#define MAX_PARTICLES 10000000
 #define MAX_PARTICLES_PER_CELL 2000
-#define NX 50
-#define NY 50
-#define NZ 50
+#define NX 20
+#define NY 20
+#define NZ 20
 
-#define PARTICLES_SZ (MAX_PARTICLES * sizeof(Particle))
+#define PARTICLES_FIELD_SZ (MAX_PARTICLES * sizeof(double))
 #define SAMPLES_SZ (NX * NY * NZ * sizeof(Cell))
 #define CELL_COUNT_SZ (NX * NY * NZ * sizeof(int))
 #define CELL_LIST_SZ (NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int))
