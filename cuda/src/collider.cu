@@ -25,8 +25,6 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
 
     int collisions = 0;
 
-    __syncthreads();
-
     int rngIdx = cell_idx * blockSize + tid;
     curandState rngState = rngStates[rngIdx];
 
@@ -36,9 +34,9 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
         localParticleList[i] =
                 cellList[cell_idx * MAX_PARTICLES_PER_CELL + i];
     }
-    __syncthreads();
 
     for (int b = 0; b < d_conf.hss_nbatch; b++) {
+        __syncthreads();
         // fisher-yates shuffle (could be optimized with parallel sorting of random keys)
         if (threadIdx.x == 0) {
             for (int i = 0; i < NPC; i++) {
@@ -51,8 +49,9 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
             }
         }
 
+        __syncthreads();
+
         for (int i = tid; i < nPairs; i += blockSize) {
-            __syncthreads();
             int j = i + offset;
             if (j < NPC) {
                 int i_global = localParticleList[i];
