@@ -16,7 +16,7 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
                                   curandState *rngStates,
                                   int cell_idx
                                 ) {
-    __shared__ int collisionsBlock[128];
+    __shared__ int collisionsBlock[64];
     __shared__ int localParticleList[MAX_PARTICLES_PER_CELL];
 
     int blockSize = blockDim.x;
@@ -138,7 +138,7 @@ __global__ void no_time_counter_scheme_kernel(
             // call child kernel with stream
             cudaStream_t stream;
             cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
-            child_hss_scheme_kernel<<<1, 128, 0, stream>>>(total_collisions, P, NPC, (NPC % 2 == 0) ? NPC - 1 : NPC, cellList, rngStates, idx);
+            child_hss_scheme_kernel<<<1, 64, 0, stream>>>(total_collisions, P, NPC, (NPC % 2 == 0) ? NPC - 1 : NPC, cellList, rngStates, idx);
             cudaStreamDestroy(stream);
             // no need to sync because of atomic add to collisions, only sync at very end
         }
