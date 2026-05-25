@@ -91,7 +91,7 @@ void config_setup(Config *config) {
     config->ntcs_collisionProbMultiplier = pow(config->CrRef, config->ntcs_collisionProbExponent) * config->sigmaRef / majorant;
 
     config->hss_nbatch = 3;
-    config->hss_threshold = 200.0; // threshold for switching to HSS, in number of particles per cell
+    config->hss_threshold = 500.0; // threshold for switching to HSS, in number of particles per cell
     config->hss_collisionProbMultiplier = (1.0/config->hss_nbatch) * config->weight * config->sigmaRef * config->dt / config->cellVolume;
 
     config->generation_derivatedMultiplier = sqrt(config->KB * config->TFree / config->moleculeMass);
