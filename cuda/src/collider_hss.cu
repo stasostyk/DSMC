@@ -14,7 +14,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                                   int *cellCount,
                                   int *cellList,
                                   curandState *rngStates) {
-    __shared__ int collisionsBlock[64];
+    __shared__ int collisionsBlock[32];
     __shared__ int localParticleList[MAX_PARTICLES_PER_CELL];
     __shared__ int NPC;
     __shared__ int N_x;
@@ -88,14 +88,20 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                         float N[3];
                         random_isotropic_vector_device(N, &rngState);
                         relativeSpeed *= 0.5f;
-                        float VC[3] = {0.5f * (vx_j + vx_i), 0.5f * (vy_j + vy_i), 0.5f * (vz_j + vz_i)};
-                        float VCr[3] = {relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2]};
-                        P.vx[i_global] = VC[0] + VCr[0];
-                        P.vy[i_global] = VC[1] + VCr[1];
-                        P.vz[i_global] = VC[2] + VCr[2];
-                        P.vx[j_global] = VC[0] - VCr[0];
-                        P.vy[j_global] = VC[1] - VCr[1];
-                        P.vz[j_global] = VC[2] - VCr[2];
+                        // float VC[3] = {0.5f * (vx_j + vx_i), 0.5f * (vy_j + vy_i), 0.5f * (vz_j + vz_i)};
+                        float VC_x = 0.5f * (vx_j + vx_i);
+                        float VC_y = 0.5f * (vy_j + vy_i);
+                        float VC_z = 0.5f * (vz_j + vz_i);
+                        // float VCr[3] = {relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2]};
+                        float VCr_x = relativeSpeed * N[0];
+                        float VCr_y = relativeSpeed * N[1];
+                        float VCr_z = relativeSpeed * N[2];
+                        P.vx[i_global] = VC_x + VCr_x;
+                        P.vy[i_global] = VC_y + VCr_y;
+                        P.vz[i_global] = VC_z + VCr_z;
+                        P.vx[j_global] = VC_x - VCr_x;
+                        P.vy[j_global] = VC_y - VCr_y;
+                        P.vz[j_global] = VC_z - VCr_z;
 
                         collisionsBlock[tid] += 1;
                     }
@@ -124,7 +130,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 }
 
 void collide_particles_hss(Simulation *sim) {
-    dim3 threadsPerBlock(64);
+    dim3 threadsPerBlock(32);
     dim3 blocksPerGrid(NX, NY, NZ);
 
     hss_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
