@@ -37,7 +37,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         if (NPC < d_conf.hss_threshold) return;
 
         int rngIdx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z) * blockSize + tid;
-        curandState rngState = rngStates[rngIdx];
+        curandState rngState;
 
         int nPairs = NPC / 2;
         int offset = (NPC + 1) / 2;
@@ -64,6 +64,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
             for (int i = tid; i < nPairs; i += blockSize) {
                 int j = i + offset;
                 if (j < NPC) {
+                    rngState = rngStates[rngIdx];
                     int i_global = localParticleList[i];
                     int j_global = localParticleList[j];
 
@@ -98,12 +99,12 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
                         collisionsBlock[tid] += 1;
                     }
+                    rngStates[rngIdx] = rngState;
                 }
 
             }
             __syncthreads();
         }
-        rngStates[rngIdx] = rngState;
     }
 
     __syncthreads();
