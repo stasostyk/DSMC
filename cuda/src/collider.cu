@@ -77,7 +77,7 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
                     + relativeVel_z * relativeVel_z);
 
 
-                float prob = d_conf.hss_collisionProbMultiplier * N_x * relativeSpeed;
+                float prob = d_conf.hss_collisionProbMultiplier * N_x * sqrt(relativeSpeed);
                 if (curand_uniform(&rngState) < prob) {
                     //                    4. collide
                     float N[3];
