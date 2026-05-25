@@ -137,7 +137,7 @@ __global__ void no_time_counter_scheme_kernel(
     if (k < NX && l < NY && m < NZ) {
         int idx = IDX_CELL(k, l, m);
         int NPC = cellCount[idx];
-        if (NPC > 300) {
+        if (NPC > 200) {
             // call child kernel with stream
             cudaStream_t stream;
             cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
