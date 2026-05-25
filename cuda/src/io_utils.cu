@@ -32,6 +32,18 @@ void print_global_diagnostics(Simulation *sim, int step) {
     printf("  mean_u=(%.6e, %.6e, %.6e)\n", ux, uy, uz);
     printf("  T=%.6e\n", T);
     printf("  totalCollisions = %lld\n", sim->totalCollisions);
+
+    // print the number of particles per cell in the middle slice
+    printf("  particles per cell in middle slice (z = Lz/2):\n");
+    int mid_m = NZ / 2;
+    for (int l = 0; l < NY; l++) {
+        for (int k = 0; k < NX; k++) {
+            int count = sim->samples[IDX_CELL(k, l, mid_m)].countNP / sim->sampleSteps;
+            printf("%4d ", (int)count);
+        }
+        printf("\n");
+    }
+    
 }
 
 void write_averaged_macros(Simulation *sim, const char *filename) {
