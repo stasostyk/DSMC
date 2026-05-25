@@ -34,7 +34,7 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
     int offset = (NPC + 1) / 2;
     for (int i = tid; i < NPC; i += blockSize) {
         localParticleList[i] =
-                cellList[IDX_LIST(blockIdx.x, blockIdx.y, blockIdx.z, i)];
+                cellList[cell_idx * MAX_PARTICLES_PER_CELL + i];
     }
     __syncthreads();
 
@@ -228,8 +228,6 @@ __global__ void no_time_counter_scheme_kernel(
     if (tid == 0) {
         atomicAdd(total_collisions, (unsigned long long)collisionsBlock[0]);
     }
-
-    cudaDeviceSynchronize(); // ensure all child kernels have finished before we move to the next cell
 }
 
 void collide_particles(Simulation *sim) {
