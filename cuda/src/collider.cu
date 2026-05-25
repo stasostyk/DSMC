@@ -16,7 +16,7 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
                                   curandState *rngStates,
                                   int cell_idx
                                 ) {
-    __shared__ int collisionsBlock[32];
+    __shared__ int collisionsBlock[64];
     __shared__ int localParticleList[MAX_PARTICLES_PER_CELL];
 
     int blockSize = blockDim.x;
@@ -28,7 +28,7 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
     __syncthreads();
 
     int rngIdx = cell_idx * blockSize + tid;
-    curandState rngState;
+    curandState rngState = rngStates[rngIdx];
 
     int nPairs = NPC / 2;
     int offset = (NPC + 1) / 2;
@@ -41,7 +41,6 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
     for (int b = 0; b < d_conf.hss_nbatch; b++) {
         // fisher-yates shuffle (could be optimized with parallel sorting of random keys)
         if (threadIdx.x == 0) {
-            rngState = rngStates[rngIdx];
             for (int i = 0; i < NPC; i++) {
                 int j = i + (int) (curand_uniform(&rngState) * (NPC - i));
                 if (j < NPC) {
@@ -56,7 +55,6 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
         for (int i = tid; i < nPairs; i += blockSize) {
             int j = i + offset;
             if (j < NPC) {
-                rngState = rngStates[rngIdx];
                 int i_global = localParticleList[i];
                 int j_global = localParticleList[j];
 
@@ -77,7 +75,7 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
                     + relativeVel_z * relativeVel_z);
 
 
-                float prob = d_conf.hss_collisionProbMultiplier * N_x * sqrt(relativeSpeed);
+                float prob = d_conf.hss_collisionProbMultiplier * N_x * sqrtf(relativeSpeed);
                 if (curand_uniform(&rngState) < prob) {
                     //                    4. collide
                     float N[3];
@@ -100,12 +98,11 @@ __global__ void child_hss_scheme_kernel(unsigned long long *total_collisions,
 
                     collisionsBlock[tid] += 1;
                 }
-                rngStates[rngIdx] = rngState;
             }
-
         }
         __syncthreads();
     }
+    rngStates[rngIdx] = rngState;
 
     __syncthreads();
 
@@ -137,11 +134,11 @@ __global__ void no_time_counter_scheme_kernel(
     if (k < NX && l < NY && m < NZ) {
         int idx = IDX_CELL(k, l, m);
         int NPC = cellCount[idx];
-        if (NPC > 200) {
+        if (NPC > d_conf.hss_threshold) {
             // call child kernel with stream
             cudaStream_t stream;
             cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
-            child_hss_scheme_kernel<<<1, 32, 0, stream>>>(total_collisions, P, NPC, (NPC % 2 == 0) ? NPC - 1 : NPC, cellList, rngStates, idx);
+            child_hss_scheme_kernel<<<1, 64, 0, stream>>>(total_collisions, P, NPC, (NPC % 2 == 0) ? NPC - 1 : NPC, cellList, rngStates, idx);
             cudaStreamDestroy(stream);
             // no need to sync because of atomic add to collisions, only sync at very end
         }

@@ -15,7 +15,6 @@ set(SOURCES
     src/math_utils.cu 
     src/config.cu 
     src/collider.cu
-    src/collider_hss.cu
     src/simulation.cu
     src/io_utils.cu
     src/timer.cu
