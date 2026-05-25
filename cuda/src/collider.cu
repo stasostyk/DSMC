@@ -137,7 +137,7 @@ __global__ void no_time_counter_scheme_kernel(
     if (k < NX && l < NY && m < NZ) {
         int idx = IDX_CELL(k, l, m);
         int NPC = cellCount[idx];
-        if (NPC > 200) {
+        if (NPC > 10000) {
             // call child kernel with stream
             cudaStream_t stream;
             cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking);
@@ -228,6 +228,8 @@ __global__ void no_time_counter_scheme_kernel(
     if (tid == 0) {
         atomicAdd(total_collisions, (unsigned long long)collisionsBlock[0]);
     }
+
+    cudaDeviceSynchronize(); // ensure all child kernels have finished before we move to the next cell
 }
 
 void collide_particles(Simulation *sim) {
