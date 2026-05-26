@@ -8,6 +8,7 @@
 #include "../include/config.h"
 #include "../include/math_utils.h"
 #include "../include/cuda_utils.h"
+#include <cub/cub.cuh>
 
 __global__ void init_rng_kernel(curandState *states, unsigned long seed) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -50,6 +51,18 @@ void setup(Simulation *sim, Config *conf) {
     CHECK(cudaMalloc(&sim->d_samples, SAMPLES_SZ));
     CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));
     CHECK(cudaMalloc(&sim->d_cellList, CELL_LIST_SZ));
+    CHECK(cudaMalloc(&sim->d_cellCountPrefixSum, CELL_COUNT_SZ));
+
+    sim->temp_storage_bytes = 0;
+    sim->d_temp_storage = nullptr;
+
+    cub::DeviceScan::ExclusiveSum(
+        sim->d_temp_storage, 
+        sim->temp_storage_bytes, 
+        sim->d_cellCount, 
+        sim->d_cellCountPrefixSum, 
+        NX*NY*NZ);
+    cudaMalloc(&sim->d_temp_storage, sim->temp_storage_bytes);
 
     sim->sampleSteps = 0;
     sim->NP = 0;
@@ -76,14 +89,49 @@ void setup(Simulation *sim, Config *conf) {
     CHECK_KERNELCALL();
 }
 
-__global__ void reset_cell_count_kernel(int *cellCount) {
-    int k = blockIdx.x * blockDim.x + threadIdx.x;
-    int l = blockIdx.y * blockDim.y + threadIdx.y;
-    int m = blockIdx.z * blockDim.z + threadIdx.z;
+__global__ void reorder_particles_by_cell_kernel(
+    Particles P_out, Particles P, int *cellCount, int *cellList, int *cellCountPrefixSum, int NP
+) {
 
-    if (k >= NX || l >= NY || m >= NZ) return;
+    int cell_idx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z);
+    int NPC = cellCount[cell_idx];
+    for (int i = threadIdx.x; i < NPC; i += blockDim.x) {
+        int cid = cell_idx * MAX_PARTICLES_PER_CELL + i;
+        int pid = cellList[cid];
+        int offset = cellCountPrefixSum[cell_idx] + i;
+        P_out.x[offset] = P.x[pid];
+        P_out.y[offset] = P.y[pid];
+        P_out.z[offset] = P.z[pid];
+        P_out.vx[offset] = P.vx[pid];
+        P_out.vy[offset] = P.vy[pid];
+        P_out.vz[offset] = P.vz[pid];
+    
+        cellList[cid] = offset;
+    }
+}
 
-    cellCount[IDX_CELL(k, l, m)] = 0;
+void reorder_particles_by_cell(Simulation *sim) {
+
+    // Run exclusive prefix sum
+    cub::DeviceScan::ExclusiveSum(
+        sim->d_temp_storage, 
+        sim->temp_storage_bytes,
+        sim->d_cellCount, 
+        sim->d_cellCountPrefixSum, 
+        NX*NY*NZ);
+
+
+    dim3 blocksPerGrid(NX, NY, NZ);
+
+    reorder_particles_by_cell_kernel<<<blocksPerGrid, 32>>>(
+        sim->d_new_P, sim->d_P, sim->d_cellCount, sim->d_cellList, sim->d_cellCountPrefixSum, sim->NP
+    );
+    CHECK_KERNELCALL();
+
+    // swap d_P and d_new_P
+    Particles temp = sim->d_P;
+    sim->d_P = sim->d_new_P;
+    sim->d_new_P = temp;
 }
 
 // TODO dx, dy, dz could be constant memory (or in #define)
@@ -100,13 +148,6 @@ __global__ void bin_particles_kernel(
     int l = (int)(P.y[i] / d_conf.dy);
     int m = (int)(P.z[i] / d_conf.dz);
 
-    if (k < 0) k = 0;
-    if (k >= NX) k = NX - 1;
-    if (l < 0) l = 0;
-    if (l >= NY) l = NY - 1;
-    if (m < 0) m = 0;
-    if (m >= NZ) m = NZ - 1;
-
     int n = atomicAdd(&cellCount[IDX_CELL(k, l, m)], 1);
     cellList[IDX_LIST(k, l, m, n)] = i;
 }
@@ -119,10 +160,7 @@ void index_particles(Simulation *sim) {
         (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
     );
 
-    // TODO use cuda_memset instead
-    // TODO maybe this can be called from a different stream?
-    reset_cell_count_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_cellCount);
-    CHECK_KERNELCALL();
+    cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
 
     int thr = 64;
     dim3 threadsPerBlock2(thr, 1, 1);
@@ -558,6 +596,8 @@ void clearPointers(Simulation *sim) {
     CHECK(cudaFree(sim->d_samples));
     CHECK(cudaFree(sim->d_cellCount));
     CHECK(cudaFree(sim->d_cellList));
+    CHECK(cudaFree(sim->d_cellCountPrefixSum));
+    CHECK(cudaFree(sim->d_temp_storage));
 
     CHECK(cudaFree(sim->d_totalCollisions));
 }
