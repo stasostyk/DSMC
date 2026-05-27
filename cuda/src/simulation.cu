@@ -153,13 +153,6 @@ __global__ void bin_particles_kernel(
 }
 
 void index_particles(Simulation *sim) {
-    dim3 threadsPerBlock(4, 4, 4);
-    dim3 blocksPerGrid(
-        (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
-        (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
-        (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
-    );
-
     cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
 
     int thr = 64;
