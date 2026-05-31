@@ -58,6 +58,11 @@ int main(void) {
         move_particles(&sim);
         apply_boundary_conditions_free_stream(&sim);
         index_particles(&sim);
+
+        if (step % 25 == 0) {
+            // printf("Reordering particles for better memory access...\n");
+            reorder_particles_by_cell(&sim);
+        }
         
         collide_particles_hss(&sim);
         collide_particles(&sim);
