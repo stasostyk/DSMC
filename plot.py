@@ -31,12 +31,12 @@ stream_density = 1.0
 cmap = "viridis"
 
 
-def load_structured_field(filename, density_col, temp_col, ux_col, uy_col):
+def load_structured_field(filename, density_col, temp_col, ux_col, uy_col, z_val):
     data = np.loadtxt(filename, comments="#")
 
     # extract only a single z-slice
     if (z_present):
-        z_val = 0.55;
+        # z_val = 0.55;
         data = data[data[:, 2] == z_val]
         # remove z column
         data = np.delete(data, 2, axis=1)
@@ -119,7 +119,7 @@ def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label):
 
 def main():
     if len(sys.argv) < 3:
-        print(f'Usage: {sys.argv[0]} [select case: ball/wing] [input .dat file] [output .png file (optional)]')
+        print(f'Usage: {sys.argv[0]} [select case: ball/wing] [input .dat file] [z_val = 0.5 (optional)] [output .png file (optional)]')
         exit(0)
 
     boundary_case = sys.argv[1]
@@ -128,11 +128,16 @@ def main():
         exit(0)
 
     input_filename = sys.argv[2]
-    output_filename = "advanced_plot.png"
+
+    z_val = 0.5
     if len(sys.argv) >= 4:
-        output_filename = sys.argv[3]
+        z_val = float(sys.argv[3])
+
+    output_filename = "advanced_plot.png"
+    if len(sys.argv) >= 5:
+        output_filename = sys.argv[4]
     
-    x, y, N, T, U, V = load_structured_field(input_filename, density_col, temp_col, ux_col, uy_col)
+    x, y, N, T, U, V = load_structured_field(input_filename, density_col, temp_col, ux_col, uy_col, z_val)
 
     # velocity magnitude
     Vmag = np.sqrt(U**2 + V**2)
