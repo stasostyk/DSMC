@@ -105,8 +105,29 @@ def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label):
             edgecolor="white"
         )
         ax.add_patch(wing)
-    else:
+    elif boundary_case == 'ball':
         ball = Circle((ball_cx, ball_cy), ball_radius,
+                      facecolor="white",
+                      edgecolor="white"
+                      )
+        ax.add_patch(ball)
+    else:
+        wing = Rectangle(
+            (wing_x1, wing_y - wing_thickness / 2.0),
+            wing_x2 - wing_x1,
+            wing_thickness,
+            facecolor="white",
+            edgecolor="white"
+        )
+        ax.add_patch(wing)
+        
+        ball = Circle((0.2, 0.2), 0.1,
+                      facecolor="white",
+                      edgecolor="white"
+                      )
+        ax.add_patch(ball)
+        
+        ball = Circle((0.8, 0.25), 0.2,
                       facecolor="white",
                       edgecolor="white"
                       )
@@ -123,8 +144,8 @@ def main():
         exit(0)
 
     boundary_case = sys.argv[1]
-    if boundary_case != 'ball' and boundary_case != 'wing':
-        print(f'Boundary case must be either "ball" or "wing", but was {boundary_case}')
+    if boundary_case != 'ball' and boundary_case != 'wing' and boundary_case != 'combo':
+        print(f'Boundary case must be either "ball" or "wing" or "combo", but was {boundary_case}')
         exit(0)
 
     input_filename = sys.argv[2]

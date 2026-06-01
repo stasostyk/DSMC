@@ -91,6 +91,8 @@ void config_setup(Config *config, int object_case) {
         config->ballCnt = 2;
 
         setup_wing(&(config->wings[0]));
+        setup_ball2(&(config->balls[0]));
+        setup_ball3(&(config->balls[1]));
         
         config->angleOfAttack = 30.0; // Angle of attack (degrees)
     }
