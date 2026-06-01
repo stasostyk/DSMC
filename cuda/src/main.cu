@@ -37,6 +37,8 @@ int main(int argc, char **argv) {
         object_case = 0; 
     } else if (strcmp("WING", argv[1]) == 0) {
         object_case = 1;
+    } else if (strcmp("COMBO", argv[1] == 0)) {
+        object_case = 2;
     } else {
         printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".\n");
         printf("given case: %s", argv[1]);
@@ -49,8 +51,6 @@ int main(int argc, char **argv) {
     timer_start(&allProgramTimer);
     timer_start(&t);
 
-    srand((unsigned int)time(NULL));
-    
     Simulation sim;
     Config conf;
 

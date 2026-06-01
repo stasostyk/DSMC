@@ -22,6 +22,28 @@ void setup_ball(Ball *ball) {
     ball->ballRadiusSquared = ball->ballRadius * ball->ballRadius;
 }
 
+void setup_ball2(Ball *ball) {
+    ball->ballCenterX = 0.2; // in m
+    ball->ballCenterY = 0.2; // in m
+    ball->ballCenterZ = 0.5; // in m
+    ball->ballRadius = 0.1; // in m
+    ball->Tb = 300.0; // Temperature of the ball surface (K)
+
+    // derived
+    ball->ballRadiusSquared = ball->ballRadius * ball->ballRadius;
+}
+
+void setup_ball3(Ball *ball) {
+    ball->ballCenterX = 0.8; // in m
+    ball->ballCenterY = 0.25; // in m
+    ball->ballCenterZ = 0.5; // in m
+    ball->ballRadius = 0.2; // in m
+    ball->Tb = 300.0; // Temperature of the ball surface (K)
+
+    // derived
+    ball->ballRadiusSquared = ball->ballRadius * ball->ballRadius;
+}
+
 void config_setup(Config *config, int object_case) {
     config->KB = 1.380649e-23; // Boltzmann constant in J/K
     config->NA = 6.02214076e23; // Avogadro's number in 1/mol
@@ -59,6 +81,14 @@ void config_setup(Config *config, int object_case) {
         // Wing case
         config->wingCnt = 1;
         config->ballCnt = 0;
+
+        setup_wing(&(config->wings[0]));
+        
+        config->angleOfAttack = 30.0; // Angle of attack (degrees)
+    } else if (object_case == 2) {
+        // COMBO
+        config->wingCnt = 1;
+        config->ballCnt = 2;
 
         setup_wing(&(config->wings[0]));
         
