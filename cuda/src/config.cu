@@ -59,7 +59,7 @@ void config_setup(Config *config, int object_case) {
 
     // simulation loop parameters
     config->dt = 1.0e-5;
-    config->nSteps = 5;
+    config->nSteps = 2000;
     config->printPeriod = 0;
     config->particlesPerCellTarget = 100;
     config->firstSampleStep = 1000;
