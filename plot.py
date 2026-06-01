@@ -82,7 +82,15 @@ def load_structured_field(filename, density_col, temp_col, ux_col, uy_col, z_val
 
     return x_unique, y_unique, N, Tg, U, V
 
-def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label):
+def calc_new_radius(radius, delta_z):
+    if delta_z >= radius:
+        return 0.0
+    
+    sin_a = delta_z / radius
+    cos_a = np.sqrt(1.0 - sin_a ** 2)
+    return radius * cos_a
+
+def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label, z_slice):
     cf = ax.contourf(x, y, S, levels=levels, cmap=cmap)
     cbar = plt.colorbar(cf, ax=ax)
     cbar.set_label(cbar_label)
@@ -96,6 +104,8 @@ def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label):
         arrowstyle="->"
     )
 
+    delta_z = np.abs(z_slice - 0.5)
+
     if boundary_case == 'wing':
         wing = Rectangle(
             (wing_x1, wing_y - wing_thickness / 2.0),
@@ -106,7 +116,7 @@ def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label):
         )
         ax.add_patch(wing)
     elif boundary_case == 'ball':
-        ball = Circle((ball_cx, ball_cy), ball_radius,
+        ball = Circle((ball_cx, ball_cy), calc_new_radius(ball_radius, delta_z),
                       facecolor="white",
                       edgecolor="white"
                       )
@@ -121,13 +131,13 @@ def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label):
         )
         ax.add_patch(wing)
         
-        ball = Circle((0.2, 0.2), 0.1,
+        ball = Circle((0.2, 0.2), calc_new_radius(0.1, delta_z),
                       facecolor="white",
                       edgecolor="white"
                       )
         ax.add_patch(ball)
         
-        ball = Circle((0.8, 0.25), 0.2,
+        ball = Circle((0.8, 0.25), calc_new_radius(0.2, delta_z),
                       facecolor="white",
                       edgecolor="white"
                       )
@@ -170,9 +180,9 @@ def main():
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5), dpi=150)
 
-    plot_field(boundary_case, axes[0], x, y, P, U, V, "Pressure", "p")
-    plot_field(boundary_case, axes[1], x, y, T, U, V, "Temperature", "T")
-    plot_field(boundary_case, axes[2], x, y, Vmag, U, V, "Velocity Magnitude", "|u|")
+    plot_field(boundary_case, axes[0], x, y, P, U, V, "Pressure", "p", z_val)
+    plot_field(boundary_case, axes[1], x, y, T, U, V, "Temperature", "T", z_val)
+    plot_field(boundary_case, axes[2], x, y, Vmag, U, V, "Velocity Magnitude", "|u|", z_val)
 
     for ax in axes:
         ax.set_xlabel("X")
