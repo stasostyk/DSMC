@@ -10,6 +10,13 @@
 #include "../include/cuda_utils.h"
 #include <cub/cub.cuh>
 
+void swap_particles_with_new(Simulation *sim) {
+    // swap d_P and d_new_P
+    Particles temp = sim->d_P;
+    sim->d_P = sim->d_new_P;
+    sim->d_new_P = temp;
+}
+
 __global__ void init_rng_kernel(curandState *states, unsigned long seed) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= MAX_PARTICLES) return;
@@ -84,8 +91,8 @@ void setup(Simulation *sim, Config *conf) {
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((MAX_PARTICLES + threads - 1) / threads, 1, 1);
 
-    // TODO put proper seed, as before with CPU
-    init_rng_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->rngStates, 1234);
+    unsigned long seed = (unsigned long)time(NULL);
+    init_rng_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->rngStates, seed);
     CHECK_KERNELCALL();
 }
 
@@ -118,8 +125,8 @@ void reorder_particles_by_cell(Simulation *sim) {
         sim->temp_storage_bytes,
         sim->d_cellCount, 
         sim->d_cellCountPrefixSum, 
-        NX*NY*NZ);
-
+        NX*NY*NZ
+    );
 
     dim3 blocksPerGrid(NX, NY, NZ);
 
@@ -251,7 +258,6 @@ void generate_particles_in_rect(
     sim->NP += Nnew;
 }
 
-#ifdef BALL_CASE
 // TODO this kernel (and the function that calls it) 
 // is super similar to filter_particles_out_of_bounds,
 // maybe possible to use the same one for filtering.
@@ -261,19 +267,23 @@ __global__ void filter_particles_inside_ball(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    float cx = d_conf.ballCenterX;
-    float cy = d_conf.ballCenterY;
-    float cz = d_conf.ballCenterZ;
-    float R2 = d_conf.ballRadiusSquared;
+    bool insideBall = false;
 
-    float rx = P.x[i] - cx;
-    float ry = P.y[i] - cy;
-    float rz = P.z[i] - cz;
+    for (int ballId = 0; ballId < d_conf.ballCnt; ballId++) {
+        float cx = d_conf.balls[ballId].ballCenterX;
+        float cy = d_conf.balls[ballId].ballCenterY;
+        float cz = d_conf.balls[ballId].ballCenterZ;
+        float R2 = d_conf.balls[ballId].ballRadiusSquared;
 
-    // check if particle valid
-    if (rx*rx + ry*ry + rz*rz > R2) {
+        float rx = P.x[i] - cx;
+        float ry = P.y[i] - cy;
+        float rz = P.z[i] - cz;
+
+        insideBall |= (rx*rx + ry*ry + rz*rz <= R2);
+    }
+
+    if (!insideBall) {
         int pos = atomicAdd(new_NP, 1);
-//        P_out[pos] = P[i];
         P_out.x[pos] = P.x[i];
         P_out.y[pos] = P.y[i];
         P_out.z[pos] = P.z[i];
@@ -283,7 +293,7 @@ __global__ void filter_particles_inside_ball(
     }
 }
 
-void remove_particles_inside_ball(Simulation *sim) {
+void remove_particles_inside_balls(Simulation *sim) {
     int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
@@ -301,21 +311,16 @@ void remove_particles_inside_ball(Simulation *sim) {
     CHECK(cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
     sim->NP = host_new_NP;
     
-    // swap d_P and d_new_P
-    Particles temp = sim->d_P;
-    sim->d_P = sim->d_new_P;
-    sim->d_new_P = temp;
+    swap_particles_with_new(sim);
 
     CHECK(cudaFree(d_new_NP));
 }
-#endif
 
 void initialize_particles(Simulation *sim) {
     sim->NP = 0;
     generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
-#ifdef BALL_CASE
-    remove_particles_inside_ball(sim);
-#endif
+
+    remove_particles_inside_balls(sim);
 }
 
 __global__ void filter_particles_out_of_bounds(
@@ -335,14 +340,12 @@ __global__ void filter_particles_out_of_bounds(
         P.z[i] >= 0.0 && P.z[i] < d_conf.Lz
     ) {
         int pos = atomicAdd(new_NP, 1);
-//        P_out[pos] = P[i];
         P_out.x[pos] = P.x[i];
         P_out.y[pos] = P.y[i];
         P_out.z[pos] = P.z[i];
         P_out.vx[pos] = P.vx[i];
         P_out.vy[pos] = P.vy[i];
         P_out.vz[pos] = P.vz[i];
-
     }
 }
 
@@ -376,10 +379,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     CHECK(cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
     sim->NP = host_new_NP;
     
-    // swap d_P and d_new_P
-    Particles temp = sim->d_P;
-    sim->d_P = sim->d_new_P;
-    sim->d_new_P = temp;
+    swap_particles_with_new(sim);
 
     CHECK(cudaFree(d_new_NP));
 }
@@ -398,7 +398,6 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
     P.z[i] += d_conf.dt * P.vz[i];
 
     curandState rngState = rngStates[i];
-
 
     #ifdef WING_CASE
     float dt = d_conf.dt;
@@ -429,9 +428,12 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
             P.y[i] = WingY + Dt1 * P.vy[i];
         }
     }
-    #elif defined(BALL_CASE)
-    // Ray-sphere intersection test
-    {
+    #endif
+
+    // CHECK BALLS
+    for (int ballId = 0; ballId < d_conf.ballCnt; ballId++) {
+        // Ray-sphere intersection test
+        
         // Initial and final positions
         float x0 = X0, y0 = Y0, z0 = Z0;
         float x1 = P.x[i], y1 = P.y[i], z1 = P.z[i];
@@ -442,10 +444,10 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
         float dz = z1 - z0;
 
         // Sphere center
-        float cx = d_conf.ballCenterX;
-        float cy = d_conf.ballCenterY;
-        float cz = d_conf.ballCenterZ;
-        float ballRadius = d_conf.ballRadius;
+        float cx = d_conf.balls[ballId].ballCenterX;
+        float cy = d_conf.balls[ballId].ballCenterY;
+        float cz = d_conf.balls[ballId].ballCenterZ;
+        float ballRadius = d_conf.balls[ballId].ballRadius;
 
         // Shifted initial position
         float rx = x0 - cx;
@@ -487,7 +489,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
 
                 // Diffuse reflection aligned with normal
                 diffuse_scattering_device(&(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
-                                d_conf.moleculeMass, d_conf.Tb,
+                                d_conf.moleculeMass, d_conf.balls[ballId].Tb,
                                 nx, ny, nz, d_conf.KB,
                                 &rngState
                             );
@@ -499,8 +501,6 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
             }
         }
     }
-
-    #endif
 
     rngStates[i] = rngState;
 }

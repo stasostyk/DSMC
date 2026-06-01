@@ -1,6 +1,7 @@
 #ifndef DSMC_CONFIG_H
 #define DSMC_CONFIG_H
 
+#include "object.h"
 #include <cuda_runtime.h>
 
 #define MAX_PARTICLES 10000000
@@ -35,33 +36,17 @@ typedef struct {
     int firstSampleStep;
     int samplingPeriod;
 
-    #ifdef WING_CASE
-        // wing
-        float WingX;
-        float WingY;
-        float WingLength;
-        double Tw;
+    // stream
+    double MaFree;
+    double PFree;
+    double TFree;
+    float angleOfAttack;
 
-        // stream
-        double MaFree;
-        double PFree;
-        double TFree;
-        float angleOfAttack;
-    #elif defined(BALL_CASE)
-        // ball 
-        float ballCenterX;
-        float ballCenterY;
-        float ballCenterZ;
-        float ballRadius;
-        double Tb;
+    int wingCnt;
+    Wing wings[3]; // max 3 wings, but can be changed
 
-        float ballRadiusSquared; // derived
-
-        // stream
-        double MaFree;
-        double PFree;
-        double TFree;
-    #endif
+    int ballCnt;
+    Ball balls[3]; // max 3 balls, but can be changed
 
     // VHS model
     double omega;
@@ -93,6 +78,6 @@ typedef struct {
 
 extern __constant__ Config d_conf;
 
-void config_setup(Config *config);
+void config_setup(Config *config, int object_case);
 
 #endif //DSMC_CONFIG_H

@@ -26,7 +26,24 @@ void move_neccessary_data_before_printing(Simulation *sim) {
     CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
 } 
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".");
+        return 0;
+    }
+
+    int object_case;
+    if (strcmp("BALL", argv[1]) == 0) {
+        object_case = 0; 
+    } else if (strcmp("WING", argv[1]) == 0) {
+        object_case = 1;
+    } else {
+        printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".");
+        printf("given case: %s", argv[1]);
+        return 0;
+    }
+    printf("Running case: %s", argv[1]);
+
     Timer t, allProgramTimer;
 
     timer_start(&allProgramTimer);
@@ -37,16 +54,7 @@ int main(void) {
     Simulation sim;
     Config conf;
 
-    #ifdef WING_CASE
-        printf("Running Wing case.\n");
-    #elif defined(BALL_CASE)
-        printf("Running Ball case.\n");
-    #else
-        printf("No case selected. Aborting.\n");
-        return 0;
-    #endif
-
-    config_setup(&conf);
+    config_setup(&conf, object_case);
     setup(&sim, &conf);
     initialize_particles(&sim);
 
@@ -59,7 +67,7 @@ int main(void) {
         apply_boundary_conditions_free_stream(&sim);
         index_particles(&sim);
 
-        if (step % 25 == 0) {
+        if (step % 20 == 0) {
             // printf("Reordering particles for better memory access...\n");
             reorder_particles_by_cell(&sim);
         }
