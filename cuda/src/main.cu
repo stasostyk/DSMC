@@ -28,7 +28,7 @@ void move_neccessary_data_before_printing(Simulation *sim) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".");
+        printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".\n");
         return 0;
     }
 
@@ -38,11 +38,11 @@ int main(int argc, char **argv) {
     } else if (strcmp("WING", argv[1]) == 0) {
         object_case = 1;
     } else {
-        printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".");
+        printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".\n");
         printf("given case: %s", argv[1]);
         return 0;
     }
-    printf("Running case: %s", argv[1]);
+    printf("Running case: %s\n", argv[1]);
 
     Timer t, allProgramTimer;
 

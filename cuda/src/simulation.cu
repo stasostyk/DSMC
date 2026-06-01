@@ -141,7 +141,6 @@ void reorder_particles_by_cell(Simulation *sim) {
     sim->d_new_P = temp;
 }
 
-// TODO dx, dy, dz could be constant memory (or in #define)
 __global__ void bin_particles_kernel(
     Particles P, int *cellCount, int *cellList, int NP
 ) {
@@ -399,36 +398,38 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
 
     curandState rngState = rngStates[i];
 
-    #ifdef WING_CASE
-    float dt = d_conf.dt;
-    double moleculeMass = d_conf.moleculeMass;
-    double Tw = d_conf.Tw;
-    float WingX = d_conf.WingX;
-    float WingY = d_conf.WingY;
-    float WingLength = d_conf.WingLength;
+    // CHECK WINGS
+    for (int wingId = 0; wingId < d_conf.wingCnt; wingId++) {
+        float dt = d_conf.dt;
+        double moleculeMass = d_conf.moleculeMass;
+        double Tw = d_conf.wings[wingId].Tw;
+        float WingX = d_conf.wings[wingId].WingX;
+        float WingY = d_conf.wings[wingId].WingY;
+        float WingLength = d_conf.wings[wingId].WingLength;
 
-    if ( ( Y0 - WingY ) * ( P.y[i] - WingY ) < 0.0 ) {
-        // Linear interpolation to point Y = WingY
-        float Xw=( X0*(WingY-P.y[i])+P.x[i]*(Y0-WingY))/(Y0-P.y[i]);
-        float Zw=( Z0*(WingY-P.y[i])+P.z[i]*(Y0-WingY))/(Y0-P.y[i]);
-        if ( Zw < 0.3 || Zw > 0.7 ) return; // wing only occupies 0.3 < z < 0.7
-        if ( Xw > WingX && Xw < WingX + WingLength ) {
-            // Molecule interacts with the wing during the time step
-            // Linear interpolation of the time of scattering, Eq. (6.5.4)
-            float Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P.y[i] );
-            // Generate velocity vector of the reflected molecule
-            diffuse_scattering_y_device(
-                &(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
-                moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
-                d_conf.KB,
-                &rngState
-            );
-            // Move the reflected molecule
-            P.x[i] = Xw + Dt1 * P.vx[i];
-            P.y[i] = WingY + Dt1 * P.vy[i];
+        if ( ( Y0 - WingY ) * ( P.y[i] - WingY ) < 0.0 ) {
+            // Linear interpolation to point Y = WingY
+            float Xw=( X0*(WingY-P.y[i])+P.x[i]*(Y0-WingY))/(Y0-P.y[i]);
+            float Zw=( Z0*(WingY-P.y[i])+P.z[i]*(Y0-WingY))/(Y0-P.y[i]);
+            if ( Zw < 0.3 || Zw > 0.7 ) return; // wing only occupies 0.3 < z < 0.7
+            if ( Xw > WingX && Xw < WingX + WingLength ) {
+                // Molecule interacts with the wing during the time step
+                // Linear interpolation of the time of scattering, Eq. (6.5.4)
+                float Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P.y[i] );
+                // Generate velocity vector of the reflected molecule
+                diffuse_scattering_y_device(
+                    &(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
+                    moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
+                    d_conf.KB,
+                    &rngState
+                );
+                // Move the reflected molecule
+                P.x[i] = Xw + Dt1 * P.vx[i];
+                P.y[i] = WingY + Dt1 * P.vy[i];
+            }
         }
     }
-    #endif
+
 
     // CHECK BALLS
     for (int ballId = 0; ballId < d_conf.ballCnt; ballId++) {
