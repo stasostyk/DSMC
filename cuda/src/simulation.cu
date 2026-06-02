@@ -68,7 +68,7 @@ void setup(Simulation *sim, Config *conf) {
     CHECK(cudaMalloc(&sim->d_particleIds, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&sim->d_particleIdsSorted, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&sim->d_cellKeys, sizeof(int) * MAX_PARTICLES));
-    CHECK(cudaMalloc(&sim->d_cellKeysSorted, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&sim->d_cellKeysSorted, max(CELL_COUNT_SZ, sizeof(int) * MAX_PARTICLES)));
 
     sim->temp_storage_bytes = 0;
     sim->d_temp_storage = nullptr;
@@ -519,10 +519,10 @@ void filter_and_index_particles(Simulation *sim) {
     );
 
     int h_lastPrefixVal, h_lastValid;
-    cudaMemcpy(&h_lastPrefixVal, sim->d_particleIds + sim->NP - 1,
-               sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(&h_lastValid, sim->d_valid + sim->NP - 1,
-               sizeof(int), cudaMemcpyDeviceToHost);
+    CHECK(cudaMemcpy(&h_lastPrefixVal, sim->d_particleIds + sim->NP - 1,
+               sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(&h_lastValid, sim->d_valid + sim->NP - 1,
+               sizeof(int), cudaMemcpyDeviceToHost));
     int h_newNP = h_lastPrefixVal + h_lastValid;
 
     scatter_and_key_kernel<<<blocksPerGrid, threadsPerBlock>>>(
@@ -541,14 +541,14 @@ void filter_and_index_particles(Simulation *sim) {
 
     dim3 blocksNew((h_newNP + threads - 1) / threads, 1, 1);
     // Copy prefix sum into a mutable "cursor" array (reuse d_particleIds as scratch)
-    cudaMemcpy(sim->d_particleIds, sim->d_cellCountPrefixSum,
-            sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice);
+    CHECK(cudaMemcpy(sim->d_cellKeysSorted, sim->d_cellCountPrefixSum,
+            sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice));
 
-    cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
+    CHECK(cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ));
     counting_sort_scatter_kernel<<<blocksNew, threadsPerBlock>>>(
         sim->d_new_P, sim->d_P,
         sim->d_cellKeys,
-        sim->d_particleIds,   // cursor (gets incremented)
+        sim->d_cellKeysSorted,   // cursor (gets incremented)
         sim->d_cellCount,
         h_newNP
     );
