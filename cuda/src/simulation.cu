@@ -443,25 +443,60 @@ __global__ void scatter_and_key_kernel(
     cellKeys[j] = IDX_CELL(k,l,m);
 }
 
-__global__ void gather_kernel(
+// __global__ void gather_kernel(
+//     Particles P_in, Particles P_out,
+//     int *sortedIds,          // output of SortPairs: particle indices in cell order
+//     int *sortedCellKeys, int *cellCount,
+//     int NP
+// ) {
+//     int i = blockIdx.x * blockDim.x + threadIdx.x;
+//     if (i >= NP) return;
+
+//     int src = sortedIds[i];   // which compacted particle goes to slot i
+
+//     P_out.x[i]  = P_in.x[src];
+//     P_out.y[i]  = P_in.y[src];
+//     P_out.z[i]  = P_in.z[src];
+//     P_out.vx[i] = P_in.vx[src];
+//     P_out.vy[i] = P_in.vy[src];
+//     P_out.vz[i] = P_in.vz[src];
+
+//     atomicAdd(&cellCount[sortedCellKeys[i]], 1);
+// }
+
+__global__ void rebuild_cell_count_kernel(
+    int *sortedCellKeys, int *cellCount, int NP
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+    atomicAdd(&cellCount[sortedCellKeys[i]], 1);
+}
+
+// Already have cellCount from scatter_and_key_kernel (you compute cellKeys[j] there)
+// Step 1: prefix sum over cellCount → gives start offset per cell  
+// Step 2: scatter particles to final position using atomicAdd per cell
+
+__global__ void counting_sort_scatter_kernel(
     Particles P_in, Particles P_out,
-    int *sortedIds,          // output of SortPairs: particle indices in cell order
-    int *sortedCellKeys, int *cellCount,
+    int *cellKeys,           // cell of each compacted particle
+    int *cellOffsets,        // prefix sum of cellCount (write cursor per cell)
+    int *cellCount,
     int NP
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    int src = sortedIds[i];   // which compacted particle goes to slot i
+    int cell = cellKeys[i];
+    int dest = atomicAdd(&cellOffsets[cell], 1);  // claim a slot
 
-    P_out.x[i]  = P_in.x[src];
-    P_out.y[i]  = P_in.y[src];
-    P_out.z[i]  = P_in.z[src];
-    P_out.vx[i] = P_in.vx[src];
-    P_out.vy[i] = P_in.vy[src];
-    P_out.vz[i] = P_in.vz[src];
+    P_out.x[dest]  = P_in.x[i];
+    P_out.y[dest]  = P_in.y[i];
+    P_out.z[dest]  = P_in.z[i];
+    P_out.vx[dest] = P_in.vx[i];
+    P_out.vy[dest] = P_in.vy[i];
+    P_out.vz[dest] = P_in.vz[i];
 
-    atomicAdd(&cellCount[sortedCellKeys[i]], 1);
+    atomicAdd(&cellCount[cell], 1);
 }
 
 void filter_and_index_particles(Simulation *sim) {
@@ -497,38 +532,66 @@ void filter_and_index_particles(Simulation *sim) {
     );
     CHECK_KERNELCALL();
 
-
-
-    // Values to sort: we want particle positions (0..h_newNP-1) 
-    // so we can gather them in cell order.
-    // Re-initialize d_particleIds as 0,1,2,...,h_newNP-1
-    thrust::sequence(
-        thrust::device,
-        sim->d_particleIds,
-        sim->d_particleIds + h_newNP
+    // DO SORT
+    cub::DeviceScan::ExclusiveSum(
+        sim->d_temp_storage, sim->temp_storage_bytes,
+        sim->d_cellCount, sim->d_cellCountPrefixSum,
+        NX * NY * NZ
     );
-
-    cub::DeviceRadixSort::SortPairs(
-        sim->d_temp_storage,
-        sim->temp_storage_bytes,
-        sim->d_cellKeys,          // keys in  (cell index of compacted particle i)
-        sim->d_cellKeysSorted,    // keys out
-        sim->d_particleIds,       // values in  (0,1,2,...,h_newNP-1)
-        sim->d_particleIdsSorted, // values out (permutation)
-        h_newNP,
-        0, sim->radixSortBits
-    );
-
-    cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
 
     dim3 blocksNew((h_newNP + threads - 1) / threads, 1, 1);
-    gather_kernel<<<blocksNew, threadsPerBlock>>>(
-        sim->d_new_P, sim->d_P,          // src=compacted, dst=final
-        sim->d_particleIdsSorted,
-        sim->d_cellKeysSorted, sim->d_cellCount,
+    // Copy prefix sum into a mutable "cursor" array (reuse d_particleIds as scratch)
+    cudaMemcpy(sim->d_particleIds, sim->d_cellCountPrefixSum,
+            sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice);
+
+    cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
+    counting_sort_scatter_kernel<<<blocksNew, threadsPerBlock>>>(
+        sim->d_new_P, sim->d_P,
+        sim->d_cellKeys,
+        sim->d_particleIds,   // cursor (gets incremented)
+        sim->d_cellCount,
         h_newNP
     );
     CHECK_KERNELCALL();
+
+    // rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
+    //     sim->d_cellKeys, sim->d_cellCount, h_newNP
+    // );
+    // CHECK_KERNELCALL();
+
+
+
+
+    // // Values to sort: we want particle positions (0..h_newNP-1) 
+    // // so we can gather them in cell order.
+    // // Re-initialize d_particleIds as 0,1,2,...,h_newNP-1
+    // thrust::sequence(
+    //     thrust::device,
+    //     sim->d_particleIds,
+    //     sim->d_particleIds + h_newNP
+    // );
+
+    // cub::DeviceRadixSort::SortPairs(
+    //     sim->d_temp_storage,
+    //     sim->temp_storage_bytes,
+    //     sim->d_cellKeys,          // keys in  (cell index of compacted particle i)
+    //     sim->d_cellKeysSorted,    // keys out
+    //     sim->d_particleIds,       // values in  (0,1,2,...,h_newNP-1)
+    //     sim->d_particleIdsSorted, // values out (permutation)
+    //     h_newNP,
+    //     0, sim->radixSortBits
+    // );
+
+    // cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
+
+    // dim3 blocksNew((h_newNP + threads - 1) / threads, 1, 1);
+    // gather_kernel<<<blocksNew, threadsPerBlock>>>(
+    //     sim->d_new_P, sim->d_P,          // src=compacted, dst=final
+    //     sim->d_particleIdsSorted,
+    //     sim->d_cellKeysSorted, sim->d_cellCount,
+    //     h_newNP
+    // );
+    // CHECK_KERNELCALL();
 
     sim->NP = h_newNP;
 
