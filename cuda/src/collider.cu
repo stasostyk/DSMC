@@ -14,7 +14,7 @@ __global__ void ntcs_persistent_kernel(
     curandState *rngStates, int *sortedCells, int totalCells,
     unsigned int *workQueueHead
 ) {
-    __shared__ unsigned int collisionsBlock[256];
+    __shared__ unsigned int collisionsBlock[64];
     unsigned int collisions = 0;
 
     int true_tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -25,15 +25,6 @@ __global__ void ntcs_persistent_kernel(
     while (true) {
         // Grab next cell from queue — one cell per thread
         unsigned int cellQueueIdx = atomicAdd(workQueueHead, 1);
-
-        // // Replaced the single atomicAdd with warp-aggregated version:
-        // unsigned int cellQueueIdx;
-        // if ((threadIdx.x % 32) == 0) {
-        //     cellQueueIdx = atomicAdd(workQueueHead, 32);
-        // }
-        // // Broadcast from lane 0 to all lanes in warp
-        // cellQueueIdx = __shfl_sync(0xFFFFFFFF, cellQueueIdx, 0);
-        // cellQueueIdx += (threadIdx.x % 32);  // each lane gets its own index
 
         if (cellQueueIdx >= totalCells) break;
 
@@ -96,10 +87,6 @@ __global__ void ntcs_persistent_kernel(
             }
 
         }
-
-        // cellQueueIdx += 31 - (threadIdx.x % 32);  // each lane gets its own index
-
-        // if (cellQueueIdx >= totalCells) break;
     }
 
     rngStates[true_tid] = rngState;
@@ -124,7 +111,7 @@ void collide_particles(Simulation *sim) {
     int numSMs;
     cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
     int threadsPerBlock = 64;
-    int blocks = numSMs;  // 4 waves per SM keeps the queue hot
+    int blocks = numSMs;
 
     ntcs_persistent_kernel<<<blocks, threadsPerBlock>>>(
         sim->d_totalCollisions, sim->d_P,
@@ -133,18 +120,4 @@ void collide_particles(Simulation *sim) {
         sim->d_workQueueHead
     );
     CHECK_KERNELCALL();
-
-    // dim3 threadsPerBlock(4, 4, 4);
-    // dim3 blocksPerGrid(
-    //     (NZ + threadsPerBlock.x - 1) / threadsPerBlock.x,
-    //     (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
-    //     (NX + threadsPerBlock.z - 1) / threadsPerBlock.z
-    // );
-
-    // no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-    //     sim->d_totalCollisions, sim->d_P, 
-    //     sim->d_cellCount, sim->d_cellCountPrefixSum, 
-    //     sim->rngStates
-    // );
-    // CHECK_KERNELCALL();
 }
