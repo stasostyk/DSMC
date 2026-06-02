@@ -534,6 +534,8 @@ void filter_and_index_particles(Simulation *sim) {
 
     // DO SORT
 
+    cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
+
     dim3 blocksNew((h_newNP + threads - 1) / threads, 1, 1);
     rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
         sim->d_cellKeys, sim->d_cellCount, h_newNP
@@ -596,14 +598,14 @@ void filter_and_index_particles(Simulation *sim) {
 
     sim->NP = h_newNP;
 
-    // THEN COUNT PREF SUMS
-    cub::DeviceScan::ExclusiveSum(
-        sim->d_temp_storage,
-        sim->temp_storage_bytes,
-        sim->d_cellCount,
-        sim->d_cellCountPrefixSum,
-        NX * NY * NZ
-    );
+    // // THEN COUNT PREF SUMS
+    // cub::DeviceScan::ExclusiveSum(
+    //     sim->d_temp_storage,
+    //     sim->temp_storage_bytes,
+    //     sim->d_cellCount,
+    //     sim->d_cellCountPrefixSum,
+    //     NX * NY * NZ
+    // );
 
     // CHECK(cudaMemset(sim->d_new_NP, 0, sizeof(int)));
 
