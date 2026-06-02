@@ -552,7 +552,7 @@ void filter_and_index_particles(Simulation *sim) {
     CHECK(cudaMemcpy(sim->d_cellKeysSorted, sim->d_cellCountPrefixSum,
             sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice));
 
-    CHECK(cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ));
+    // CHECK(cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ));
     counting_sort_scatter_kernel<<<blocksNew, threadsPerBlock>>>(
         sim->d_new_P, sim->d_P,
         sim->d_cellKeys,
