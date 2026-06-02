@@ -463,7 +463,7 @@ __global__ void rebuild_cell_count_kernel(
 }
 
 void filter_and_index_particles(Simulation *sim) {
-    int threads = 128;
+    int threads = 256;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
