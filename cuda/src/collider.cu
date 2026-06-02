@@ -24,7 +24,18 @@ __global__ void ntcs_persistent_kernel(
     // Each thread pulls work items until queue is empty
     while (true) {
         // Grab next cell from queue — one cell per thread
-        unsigned int cellQueueIdx = atomicAdd(workQueueHead, 1);
+        // unsigned int cellQueueIdx = atomicAdd(workQueueHead, 1);
+        // if (cellQueueIdx >= totalCells) break;
+
+        // Replaced the single atomicAdd with warp-aggregated version:
+        unsigned int cellQueueIdx;
+        if ((threadIdx.x % 32) == 0) {
+            cellQueueIdx = atomicAdd(workQueueHead, 32);
+        }
+        // Broadcast from lane 0 to all lanes in warp
+        cellQueueIdx = __shfl_sync(0xFFFFFFFF, cellQueueIdx, 0);
+        cellQueueIdx += (threadIdx.x % 32);  // each lane gets its own index
+
         if (cellQueueIdx >= totalCells) break;
 
         // Use pre-sorted order: heavy cells first
@@ -103,7 +114,7 @@ __global__ void ntcs_persistent_kernel(
 }
 
 void collide_particles(Simulation *sim) {
-    cudaMemsetAsync(sim->d_workQueueHead, 0, sizeof(unsigned int));
+    cudaMemset(sim->d_workQueueHead, 0, sizeof(unsigned int));
 
     // Launch exactly as many threads as the GPU can run simultaneously —
     // more than this just adds atomic contention on workQueueHead
