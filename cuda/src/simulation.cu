@@ -243,10 +243,9 @@ __global__ void generate_particles_in_rect_kernel(
     float ry = curand_uniform(&rngState);
     float rz = curand_uniform(&rngState);
 
-    // TODO possibly better to create everything in local variable, and only then store in P?
-    P.x[idx] = x1 + (x2 - x1) * rx;
-    P.y[idx] = y1 + (y2 - y1) * ry;
-    P.z[idx] = z1 + (z2 - z1) * rz;
+    float x = x1 + (x2 - x1) * rx;
+    float y = y1 + (y2 - y1) * ry;
+    float z = z1 + (z2 - z1) * rz;
 
     float vx = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + ux;
     float vy = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + uy;
@@ -257,10 +256,14 @@ __global__ void generate_particles_in_rect_kernel(
     P.vz[idx] = vz;
 
     if (moveFlag) {
-        P.x[idx] += dt * vx;
-        P.y[idx] += dt * vy;
-        P.z[idx] += dt * vz;
+        x += dt * vx;
+        y += dt * vy;
+        z += dt * vz;
     }
+    
+    P.x[idx] = x;
+    P.y[idx] = y;
+    P.z[idx] = z;
 
     rngStates[idx] = rngState;
 }
@@ -630,14 +633,20 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    // TODO a lot of calls to global memory P[i], probably would be better to save to local
+    float p_xi = P.x[i];
+    float p_yi = P.y[i];
+    float p_zi = P.z[i];
 
-    float X0 = P.x[i];
-    float Y0 = P.y[i];
-    float Z0 = P.z[i];
-    P.x[i] += d_conf.dt * P.vx[i];
-    P.y[i] += d_conf.dt * P.vy[i];
-    P.z[i] += d_conf.dt * P.vz[i];
+    float p_vxi = P.vx[i];
+    float p_vyi = P.vy[i];
+    float p_vzi = P.vz[i];
+
+    float X0 = p_xi;
+    float Y0 = p_yi;
+    float Z0 = p_zi;
+    p_xi += d_conf.dt * p_vxi;
+    p_yi += d_conf.dt * p_vyi;
+    p_zi += d_conf.dt * p_vzi;
 
     curandState rngState = rngStates[i];
 
@@ -650,25 +659,25 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
         float WingY = d_conf.wings[wingId].WingY;
         float WingLength = d_conf.wings[wingId].WingLength;
 
-        if ( ( Y0 - WingY ) * ( P.y[i] - WingY ) < 0.0 ) {
+        if ( ( Y0 - WingY ) * ( p_yi - WingY ) < 0.0 ) {
             // Linear interpolation to point Y = WingY
-            float Xw=( X0*(WingY-P.y[i])+P.x[i]*(Y0-WingY))/(Y0-P.y[i]);
-            float Zw=( Z0*(WingY-P.y[i])+P.z[i]*(Y0-WingY))/(Y0-P.y[i]);
+            float Xw=( X0*(WingY-p_yi)+p_xi*(Y0-WingY))/(Y0-p_yi);
+            float Zw=( Z0*(WingY-p_yi)+p_zi*(Y0-WingY))/(Y0-p_yi);
             if ( Zw < 0.3 || Zw > 0.7 ) return; // wing only occupies 0.3 < z < 0.7
             if ( Xw > WingX && Xw < WingX + WingLength ) {
                 // Molecule interacts with the wing during the time step
                 // Linear interpolation of the time of scattering, Eq. (6.5.4)
-                float Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P.y[i] );
+                float Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - p_yi );
                 // Generate velocity vector of the reflected molecule
                 diffuse_scattering_y_device(
-                    &(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
+                    &(p_vxi), &(p_vyi), &(p_vzi),
                     moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
                     d_conf.KB,
                     &rngState
                 );
                 // Move the reflected molecule
-                P.x[i] = Xw + Dt1 * P.vx[i];
-                P.y[i] = WingY + Dt1 * P.vy[i];
+                p_xi = Xw + Dt1 * p_vxi;
+                p_yi = WingY + Dt1 * p_vyi;
             }
         }
     }
@@ -680,7 +689,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
         
         // Initial and final positions
         float x0 = X0, y0 = Y0, z0 = Z0;
-        float x1 = P.x[i], y1 = P.y[i], z1 = P.z[i];
+        float x1 = p_xi, y1 = p_yi, z1 = p_zi;
 
         // Direction of motion
         float dx = x1 - x0;
@@ -732,19 +741,26 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
                 float nz = (Zw - cz) / ballRadius;
 
                 // Diffuse reflection aligned with normal
-                diffuse_scattering_device(&(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
+                diffuse_scattering_device(&(p_vxi), &(p_vyi), &(p_vzi),
                                 d_conf.moleculeMass, d_conf.balls[ballId].Tb,
                                 nx, ny, nz, d_conf.KB,
                                 &rngState
                             );
 
                 // Move after collision
-                P.x[i] = Xw + Dt1 * P.vx[i];
-                P.y[i] = Yw + Dt1 * P.vy[i];
-                P.z[i] = Zw + Dt1 * P.vz[i];
+                p_xi = Xw + Dt1 * p_vxi;
+                p_yi = Yw + Dt1 * p_vyi;
+                p_zi = Zw + Dt1 * p_vzi;
             }
         }
     }
+
+    P.x[i] = p_xi;
+    P.y[i] = p_yi;
+    P.z[i] = p_zi;
+    P.vx[i] = p_vxi;
+    P.vy[i] = p_vyi;
+    P.vz[i] = p_vzi;
 
     rngStates[i] = rngState;
 }
