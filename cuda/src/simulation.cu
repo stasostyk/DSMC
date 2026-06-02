@@ -521,31 +521,32 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
  
         // Quadratic coefficients: |r + t d|^2 = R^2
         float a = dx*dx + dy*dy + dz*dz;
-        float b = 2.0 * (rx*dx + ry*dy + rz*dz);
+        float b = 2.0f * (rx*dx + ry*dy + rz*dz);
         float c = rx*rx + ry*ry + rz*rz - ballRadius*ballRadius;
 
-        float disc = b*b - 4.0*a*c;
+        float disc = b*b - 4.0f*a*c;
 
-        if (disc >= 0.0) {
+        if (disc >= 0.0f) {
             float sqrt_disc = sqrt(disc);
 
             // time solutions
-            float t1 = (-b - sqrt_disc) / (2.0*a);
-            float t2 = (-b + sqrt_disc) / (2.0*a);
+            float inv2a   = 1.0f / (2.0f * a);
+            float t1 = (-b - sqrt_disc) * inv2a;
+            float t2 = (-b + sqrt_disc) * inv2a;
 
             // pick earliest valid intersection in [0,1]
-            float t_hit = -1.0;
-            if (t1 >= 0.0 && t1 <= 1.0) t_hit = t1;
-            else if (t2 >= 0.0 && t2 <= 1.0) t_hit = t2;
+            float t_hit = -1.0f;
+            if (t1 >= 0.0f && t1 <= 1.0f) t_hit = t1;
+            else if (t2 >= 0.0f && t2 <= 1.0f) t_hit = t2;
 
-            if (t_hit >= 0.0) {
+            if (t_hit >= 0.0f) {
                 // Intersection point
                 float Xw = x0 + t_hit * dx;
                 float Yw = y0 + t_hit * dy;
                 float Zw = z0 + t_hit * dz;
 
                 // Remaining time after collision
-                float Dt1 = d_conf.dt * (1.0 - t_hit);
+                float Dt1 = d_conf.dt * (1.0f - t_hit);
 
                 // Surface normal (outward)
                 float nx = (Xw - cx) / ballRadius;
