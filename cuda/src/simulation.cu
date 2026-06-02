@@ -422,6 +422,14 @@ __global__ void gather_kernel(
     P_out.vz[i] = P_in.vz[src];
 }
 
+__global__ void rebuild_cell_count_kernel(
+    int *sortedCellKeys, int *cellCount, int NP
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+    atomicAdd(&cellCount[sortedCellKeys[i]], 1);
+}
+
 void filter_and_index_particles(Simulation *sim) {
     int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
@@ -508,6 +516,12 @@ void filter_and_index_particles(Simulation *sim) {
         sim->d_new_P, sim->d_P,          // src=compacted, dst=final
         sim->d_particleIdsSorted,
         h_newNP
+    );
+    CHECK_KERNELCALL();
+
+    // rebuild cellCount from the sorted keys
+    rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
+        sim->d_cellKeysSorted, sim->d_cellCount, h_newNP
     );
     CHECK_KERNELCALL();
 
