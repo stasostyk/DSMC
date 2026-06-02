@@ -18,7 +18,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
     __shared__ int localParticleList[MAX_PARTICLES_PER_CELL];
     __shared__ int NPC;
     __shared__ int N_x;
-    __shared__ int offset;
+    __shared__ int particle_id_offset;
 
     int blockSize = blockDim.x;
 
@@ -32,7 +32,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         if (threadIdx.x == 0) {
             NPC = cellCount[cell_idx];
             N_x = (NPC % 2 == 0) ? NPC - 1 : NPC;
-            offset = cellCountPrefixSum[cell_idx];
+            particle_id_offset = cellCountPrefixSum[cell_idx];
         }
         __syncthreads();
 
@@ -46,7 +46,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         for (int i = tid; i < NPC; i += blockSize) {
             // localParticleList[i] =
             //         cellList[IDX_LIST(blockIdx.x, blockIdx.y, blockIdx.z, i)];
-            localParticleList[i] = offset + i;
+            localParticleList[i] = particle_id_offset + i;
         }
         __syncthreads();
 
