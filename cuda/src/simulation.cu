@@ -578,7 +578,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
 }
 
 void move_particles(Simulation *sim) {
-    int threads = 128;
+    int threads = 64;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
