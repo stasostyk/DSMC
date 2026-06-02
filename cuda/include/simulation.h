@@ -51,7 +51,7 @@ typedef struct {
 } Simulation;
 
 void setup(Simulation *sim, Config *conf);
-void reorder_particles_by_cell(Simulation *sim);
+// void reorder_particles_by_cell(Simulation *sim);
 void filter_and_index_particles(Simulation *sim);
 // void index_particles(Simulation *sim);
 void initialize_particles(Simulation *sim);

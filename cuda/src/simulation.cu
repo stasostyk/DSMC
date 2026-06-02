@@ -106,50 +106,50 @@ void setup(Simulation *sim, Config *conf) {
     CHECK_KERNELCALL();
 }
 
-__global__ void reorder_particles_by_cell_kernel(
-    Particles P_out, Particles P, int *cellCount, int *cellList, int *cellCountPrefixSum, int NP
-) {
+// __global__ void reorder_particles_by_cell_kernel(
+//     Particles P_out, Particles P, int *cellCount, int *cellList, int *cellCountPrefixSum, int NP
+// ) {
 
-    int cell_idx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z);
-    int NPC = cellCount[cell_idx];
-    for (int i = threadIdx.x; i < NPC; i += blockDim.x) {
-        int cid = cell_idx * MAX_PARTICLES_PER_CELL + i;
-        int pid = cellList[cid];
-        int offset = cellCountPrefixSum[cell_idx] + i;
-        P_out.x[offset] = P.x[pid];
-        P_out.y[offset] = P.y[pid];
-        P_out.z[offset] = P.z[pid];
-        P_out.vx[offset] = P.vx[pid];
-        P_out.vy[offset] = P.vy[pid];
-        P_out.vz[offset] = P.vz[pid];
+//     int cell_idx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z);
+//     int NPC = cellCount[cell_idx];
+//     for (int i = threadIdx.x; i < NPC; i += blockDim.x) {
+//         int cid = cell_idx * MAX_PARTICLES_PER_CELL + i;
+//         int pid = cellList[cid];
+//         int offset = cellCountPrefixSum[cell_idx] + i;
+//         P_out.x[offset] = P.x[pid];
+//         P_out.y[offset] = P.y[pid];
+//         P_out.z[offset] = P.z[pid];
+//         P_out.vx[offset] = P.vx[pid];
+//         P_out.vy[offset] = P.vy[pid];
+//         P_out.vz[offset] = P.vz[pid];
     
-        cellList[cid] = offset;
-    }
-}
+//         cellList[cid] = offset;
+//     }
+// }
 
-void reorder_particles_by_cell(Simulation *sim) {
+// void reorder_particles_by_cell(Simulation *sim) {
 
-    // Run exclusive prefix sum
-    cub::DeviceScan::ExclusiveSum(
-        sim->d_temp_storage, 
-        sim->temp_storage_bytes,
-        sim->d_cellCount, 
-        sim->d_cellCountPrefixSum, 
-        NX*NY*NZ
-    );
+//     // Run exclusive prefix sum
+//     cub::DeviceScan::ExclusiveSum(
+//         sim->d_temp_storage, 
+//         sim->temp_storage_bytes,
+//         sim->d_cellCount, 
+//         sim->d_cellCountPrefixSum, 
+//         NX*NY*NZ
+//     );
 
-    dim3 blocksPerGrid(NX, NY, NZ);
+//     dim3 blocksPerGrid(NX, NY, NZ);
 
-    reorder_particles_by_cell_kernel<<<blocksPerGrid, 32>>>(
-        sim->d_new_P, sim->d_P, sim->d_cellCount, sim->d_cellList, sim->d_cellCountPrefixSum, sim->NP
-    );
-    CHECK_KERNELCALL();
+//     reorder_particles_by_cell_kernel<<<blocksPerGrid, 32>>>(
+//         sim->d_new_P, sim->d_P, sim->d_cellCount, sim->d_cellList, sim->d_cellCountPrefixSum, sim->NP
+//     );
+//     CHECK_KERNELCALL();
 
-    // swap d_P and d_new_P
-    Particles temp = sim->d_P;
-    sim->d_P = sim->d_new_P;
-    sim->d_new_P = temp;
-}
+//     // swap d_P and d_new_P
+//     Particles temp = sim->d_P;
+//     sim->d_P = sim->d_new_P;
+//     sim->d_new_P = temp;
+// }
 
 // __global__ void bin_particles_kernel(
 //     Particles P, int *cellCount, int *cellList, int *cellKeys, int NP
@@ -404,12 +404,9 @@ __global__ void scatter_and_key_kernel(
     cellKeys[j] = IDX_CELL(k,l,m);
 }
 
-__global__ void gather_and_bin_kernel(
+__global__ void gather_kernel(
     Particles P_in, Particles P_out,
     int *sortedIds,          // output of SortPairs: particle indices in cell order
-    int *sortedCellKeys,     // output of SortPairs: cell keys in sorted order
-    int *cellCount,
-    int *cellList,
     int NP
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -423,12 +420,6 @@ __global__ void gather_and_bin_kernel(
     P_out.vx[i] = P_in.vx[src];
     P_out.vy[i] = P_in.vy[src];
     P_out.vz[i] = P_in.vz[src];
-
-    // rebuild cell occupancy
-    int cell = sortedCellKeys[i];
-    int slot = atomicAdd(&cellCount[cell], 1);
-    // cellList[IDX_LIST_FLAT(cell, slot)];  // see note below
-    cellList[cell * MAX_PARTICLES_PER_CELL + slot] = i;  // new position is i
 }
 
 void filter_and_index_particles(Simulation *sim) {
@@ -513,12 +504,9 @@ void filter_and_index_particles(Simulation *sim) {
     cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
 
     dim3 blocksNew((h_newNP + threads - 1) / threads, 1, 1);
-    gather_and_bin_kernel<<<blocksNew, threadsPerBlock>>>(
+    gather_kernel<<<blocksNew, threadsPerBlock>>>(
         sim->d_new_P, sim->d_P,          // src=compacted, dst=final
         sim->d_particleIdsSorted,
-        sim->d_cellKeysSorted,
-        sim->d_cellCount,
-        sim->d_cellList,
         h_newNP
     );
     CHECK_KERNELCALL();
@@ -681,20 +669,23 @@ void move_particles(Simulation *sim) {
 }
 
 __global__ void accumulate_sampling_kernel(
-    int *cellCount, int *cellList, Cell *samples, Particles P
+    int *cellCount, int *cellCountPrefixSum, Cell *samples, Particles P
 ) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     int l = blockIdx.y * blockDim.y + threadIdx.y;
     int m = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (k >= NX || l >= NY || m >= NZ) return;
+    
+    int cellIdx = IDX_CELL(k, l, m);
+    int offset = cellCountPrefixSum[cellIdx];
 
-    int Nc = cellCount[IDX_CELL(k, l, m)];
-
-    samples[IDX_CELL(k, l, m)].countNP += Nc;
+    int Nc = cellCount[cellIdx];
+    samples[cellIdx].countNP += Nc;
 
     for (int q = 0; q < Nc; q++) {
-        int i = cellList[IDX_LIST(k, l, m, q)];
+        // int i = cellList[IDX_LIST(k, l, m, q)];
+        int i = offset + q;
 
         float vx = P.vx[i];
         float vy = P.vy[i];
@@ -719,7 +710,7 @@ void accumulate_sampling(Simulation *sim) {
     );
 
     accumulate_sampling_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_cellCount, sim->d_cellList, sim->d_samples, sim->d_P
+        sim->d_cellCount, sim->d_cellCountPrefixSum, sim->d_samples, sim->d_P
     );
     CHECK_KERNELCALL();
 }
