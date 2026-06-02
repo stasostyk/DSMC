@@ -81,6 +81,38 @@ void setup(Simulation *sim, Config *conf) {
         NX*NY*NZ);
     cudaMalloc(&sim->d_temp_storage, sim->temp_storage_bytes);
 
+    // Also check space for radix sort
+    size_t sort_temp_bytes = 0;
+    cub::DeviceRadixSort::SortPairs(
+        nullptr, sort_temp_bytes,
+        sim->d_cellKeys, sim->d_cellKeysSorted,
+        sim->d_particleIds, sim->d_particleIdsSorted,  // repurpose as value buffer
+        MAX_PARTICLES
+    );
+    // Reallocate if needed (lazy resize)
+    if (sort_temp_bytes > sim->temp_storage_bytes) {
+        cudaFree(sim->d_temp_storage);
+        cudaMalloc(&sim->d_temp_storage, sort_temp_bytes);
+        sim->temp_storage_bytes = sort_temp_bytes;
+    }
+
+    // Also check for exclusive sum again
+    size_t new_temp_bytes;
+    cub::DeviceScan::ExclusiveSum(
+        nullptr,
+        new_temp_bytes,
+        sim->d_valid,
+        sim->d_particleIds,
+        MAX_PARTICLES
+    );
+    // Reallocate if needed (lazy resize)
+    if (new_temp_bytes > sim->temp_storage_bytes) {
+        cudaFree(sim->d_temp_storage);
+        cudaMalloc(&sim->d_temp_storage, new_temp_bytes);
+        sim->temp_storage_bytes = new_temp_bytes;
+    }
+
+
     sim->sampleSteps = 0;
     sim->NP = 0;
     sim->totalCollisions = 0;
@@ -438,20 +470,7 @@ void filter_and_index_particles(Simulation *sim) {
     mark_valid_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->d_valid, sim->NP);
     CHECK_KERNELCALL();
 
-    size_t new_temp_bytes;
-    cub::DeviceScan::ExclusiveSum(
-        nullptr,
-        new_temp_bytes,
-        sim->d_valid,
-        sim->d_particleIds,
-        sim->NP
-    );
-    // Reallocate if needed (lazy resize)
-    if (new_temp_bytes > sim->temp_storage_bytes) {
-        cudaFree(sim->d_temp_storage);
-        cudaMalloc(&sim->d_temp_storage, new_temp_bytes);
-        sim->temp_storage_bytes = new_temp_bytes;
-    }
+
 
     // valid -> particle new index map
     cub::DeviceScan::ExclusiveSum(
@@ -476,19 +495,7 @@ void filter_and_index_particles(Simulation *sim) {
     );
     CHECK_KERNELCALL();
 
-    size_t sort_temp_bytes = 0;
-    cub::DeviceRadixSort::SortPairs(
-        nullptr, sort_temp_bytes,
-        sim->d_cellKeys, sim->d_cellKeysSorted,
-        sim->d_particleIds, sim->d_particleIdsSorted,  // repurpose as value buffer
-        h_newNP
-    );
-    // Reallocate if needed (lazy resize)
-    if (sort_temp_bytes > sim->temp_storage_bytes) {
-        cudaFree(sim->d_temp_storage);
-        cudaMalloc(&sim->d_temp_storage, sort_temp_bytes);
-        sim->temp_storage_bytes = sort_temp_bytes;
-    }
+
 
     // Values to sort: we want particle positions (0..h_newNP-1) 
     // so we can gather them in cell order.
