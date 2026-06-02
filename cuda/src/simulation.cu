@@ -494,18 +494,25 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
 
     // CHECK BALLS
     for (int ballId = 0; ballId < d_conf.ballCnt; ballId++) {
-        // Ray-sphere intersection test
-        
-        // Direction of motion
-        float dx = x1 - x0;
-        float dy = y1 - y0;
-        float dz = z1 - z0;
+        // Before doing expensive test, first we can check
+        // if the particle is close enough to the ball, i.e.
+        // if the particle after movement got into the ball.
 
         // Sphere center
         float cx = d_conf.balls[ballId].ballCenterX;
         float cy = d_conf.balls[ballId].ballCenterY;
         float cz = d_conf.balls[ballId].ballCenterZ;
         float ballRadius = d_conf.balls[ballId].ballRadius;
+        
+        float distSquared = (x1 - cx) * (x1 - cx) + (y1 - cy) * (y1 - cy) + (z1 - cz) * (z1 - cz);
+        if (distSquared > ballRadius * ballRadius) continue;
+
+        // Ray-sphere intersection test
+        
+        // Direction of motion
+        float dx = x1 - x0;
+        float dy = y1 - y0;
+        float dz = z1 - z0;
 
         // Shifted initial position
         float rx = x0 - cx;
