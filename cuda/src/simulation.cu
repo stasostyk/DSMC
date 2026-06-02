@@ -299,7 +299,7 @@ void remove_particles_inside_balls(Simulation *sim) {
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    CHECK(cudaMemset(&(sim->d_new_NP), 0, sizeof(int)));
+    CHECK(cudaMemset(sim->d_new_NP, 0, sizeof(int)));
 
     filter_particles_inside_ball<<<blocksPerGrid, threadsPerBlock>>>(
         sim->d_P, sim->d_new_P, sim->NP, sim->d_new_NP
@@ -363,7 +363,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    CHECK(cudaMemset(&(sim->d_new_NP), 0, sizeof(int)));
+    CHECK(cudaMemset(sim->d_new_NP, 0, sizeof(int)));
 
     filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
         sim->d_P, sim->d_new_P, sim->NP, sim->d_new_NP
