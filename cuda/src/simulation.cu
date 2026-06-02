@@ -533,13 +533,19 @@ void filter_and_index_particles(Simulation *sim) {
     CHECK_KERNELCALL();
 
     // DO SORT
+
+    dim3 blocksNew((h_newNP + threads - 1) / threads, 1, 1);
+    rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
+        sim->d_cellKeys, sim->d_cellCount, h_newNP
+    );
+    CHECK_KERNELCALL();
+
     cub::DeviceScan::ExclusiveSum(
         sim->d_temp_storage, sim->temp_storage_bytes,
         sim->d_cellCount, sim->d_cellCountPrefixSum,
         NX * NY * NZ
     );
 
-    dim3 blocksNew((h_newNP + threads - 1) / threads, 1, 1);
     // Copy prefix sum into a mutable "cursor" array (reuse d_particleIds as scratch)
     CHECK(cudaMemcpy(sim->d_cellKeysSorted, sim->d_cellCountPrefixSum,
             sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice));
@@ -551,11 +557,6 @@ void filter_and_index_particles(Simulation *sim) {
         sim->d_cellKeysSorted,   // cursor (gets incremented)
         // sim->d_cellCount,
         h_newNP
-    );
-    CHECK_KERNELCALL();
-
-    rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
-        sim->d_cellKeys, sim->d_cellCount, h_newNP
     );
     CHECK_KERNELCALL();
 
