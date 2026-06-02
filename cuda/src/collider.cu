@@ -13,9 +13,10 @@ __global__ void no_time_counter_scheme_kernel(
 ) {
     __shared__ int collisionsBlock[64];
 
-    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    // x direction varies fastest, and IDX_LIST and IDX_CELL are stored row major
+    int m = blockIdx.x * blockDim.x + threadIdx.x;
     int l = blockIdx.y * blockDim.y + threadIdx.y;
-    int m = blockIdx.z * blockDim.z + threadIdx.z;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
 
     int collisions = 0;
 
@@ -83,8 +84,6 @@ __global__ void no_time_counter_scheme_kernel(
         }
     }
 
-    // TODO maybe this calculation should be done in row major ordening?
-    // (check warp convergence, and how cuda assigns IDs to 3d thread blocks)
     int tid =
         threadIdx.x * blockDim.y * blockDim.z +
         threadIdx.y * blockDim.z +
@@ -110,9 +109,9 @@ __global__ void no_time_counter_scheme_kernel(
 void collide_particles(Simulation *sim) {
     dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
-        (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
+        (NZ + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
-        (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
+        (NX + threadsPerBlock.z - 1) / threadsPerBlock.z
     );
 
     no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
