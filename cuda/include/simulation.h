@@ -29,7 +29,6 @@ typedef struct {
     Cell *samples;    // allocated in host memory (CPU)
     Cell *d_samples;  // allocated in device memory (GPU)
     int *d_cellCount; // allocated in device memory (GPU)
-    int *d_cellList;  // allocated in device memory (GPU)
     int *d_cellCountPrefixSum;
     void *d_temp_storage;
     size_t temp_storage_bytes;
