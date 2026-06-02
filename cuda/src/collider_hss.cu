@@ -12,18 +12,19 @@
 __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                                   Particles P,
                                   int *cellCount,
-                                  int *cellList,
+                                  int *cellCountPrefixSum,
                                   curandState *rngStates) {
-    __shared__ int collisionsBlock[64];
+    __shared__ unsigned int collisionsBlock[64];
     __shared__ int localParticleList[MAX_PARTICLES_PER_CELL];
     __shared__ int NPC;
     __shared__ int N_x;
+    __shared__ int particle_id_offset;
 
     int blockSize = blockDim.x;
 
     int tid = threadIdx.x;
 
-    collisionsBlock[tid] = 0;
+    unsigned int collisions = 0;
 
     if (blockIdx.x < NX && blockIdx.y < NY && blockIdx.z < NZ) {
         int cell_idx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z);
@@ -31,6 +32,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         if (threadIdx.x == 0) {
             NPC = cellCount[cell_idx];
             N_x = (NPC % 2 == 0) ? NPC - 1 : NPC;
+            particle_id_offset = cellCountPrefixSum[cell_idx];
         }
         __syncthreads();
 
@@ -41,12 +43,14 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
         int nPairs = NPC / 2;
         int offset = (NPC + 1) / 2;
+    
         for (int i = tid; i < NPC; i += blockSize) {
-            localParticleList[i] =
-                    cellList[IDX_LIST(blockIdx.x, blockIdx.y, blockIdx.z, i)];
+            // localParticleList[i] =
+            //         cellList[IDX_LIST(blockIdx.x, blockIdx.y, blockIdx.z, i)];
+            localParticleList[i] = particle_id_offset + i;
         }
         __syncthreads();
-
+        
         for (int b = 0; b < d_conf.hss_nbatch; b++) {
             // fisher-yates shuffle (could be optimized with parallel sorting of random keys)
             if (threadIdx.x == 0) {
@@ -96,7 +100,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                         P.vy[j_global] = VC[1] - VCr[1];
                         P.vz[j_global] = VC[2] - VCr[2];
 
-                        collisionsBlock[tid] += 1;
+                        collisions += 1;
                     }
                 }
 
@@ -105,6 +109,8 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         }
         rngStates[rngIdx] = rngState;
     }
+
+    collisionsBlock[tid] = collisions;
 
     __syncthreads();
 
@@ -127,7 +133,7 @@ void collide_particles_hss(Simulation *sim) {
     dim3 blocksPerGrid(NX, NY, NZ);
 
     hss_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-            sim->d_totalCollisions, sim->d_P, sim->d_cellCount, sim->d_cellList, sim->rngStates
+            sim->d_totalCollisions, sim->d_P, sim->d_cellCount, sim->d_cellCountPrefixSum, sim->rngStates
     );
     CHECK_KERNELCALL();
 

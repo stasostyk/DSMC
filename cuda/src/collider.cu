@@ -9,22 +9,25 @@
 #include <curand_kernel.h>
 
 __global__ void no_time_counter_scheme_kernel(
-    unsigned long long *total_collisions, Particles P, int *cellCount, int *cellList, curandState *rngStates
+    unsigned long long *total_collisions, 
+    Particles P, int *cellCount, int *cellCountPrefixSum, curandState *rngStates
 ) {
-    __shared__ int collisionsBlock[64];
+    __shared__ unsigned int collisionsBlock[64];
 
-    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    // x direction varies fastest, and IDX_LIST and IDX_CELL are stored row major
+    int m = blockIdx.x * blockDim.x + threadIdx.x;
     int l = blockIdx.y * blockDim.y + threadIdx.y;
-    int m = blockIdx.z * blockDim.z + threadIdx.z;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
 
-    int collisions = 0;
+    unsigned int collisions = 0;
 
     if (k < NX && l < NY && m < NZ) {
         int idx = IDX_CELL(k, l, m);
         int NPC = cellCount[idx];
         if (NPC >= 2 && NPC < d_conf.hss_threshold) {
 
-            int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
+            // Particles for this cell are contiguous starting at this offset
+            int offset = cellCountPrefixSum[idx];
 
             curandState rngState = rngStates[idx];
 
@@ -40,10 +43,9 @@ __global__ void no_time_counter_scheme_kernel(
                 int j_offset = (int)(curand_uniform(&rngState) * (NPC - 1));
                 int j_local = (i_local + 1 + j_offset) % NPC;
 
-                
                 // two particles to collide
-                int i = IPC[i_local];
-                int j = IPC[j_local];
+                int i = i_local + offset;
+                int j = j_local + offset;
 
                 float vx_i = P.vx[i];
                 float vy_i = P.vy[i];
@@ -53,16 +55,17 @@ __global__ void no_time_counter_scheme_kernel(
                 float vy_j = P.vy[j];
                 float vz_j = P.vz[j];
 
-                float relativeVel[3] = { vx_j - vx_i, vy_j - vy_i, vz_j - vz_i };
-                float relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
-                                            + relativeVel[1] * relativeVel[1]
-                                            + relativeVel[2] * relativeVel[2]);
+                float dvx = vx_j - vx_i;
+                float dvy = vy_j - vy_i;
+                float dvz = vz_j - vz_i;
+                float relativeSpeed = sqrt(dvx * dvx + dvy * dvy + dvz * dvz);
 
                 // The real value to be calculated:
                 // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
                 // But, we assume omega=0.75, which lets us remove pow() in a simple way:
-                float collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
-                if (curand_uniform(&rngState) < collisionProb) {
+                float collisionProbSquared = d_conf.ntcs_collisionProbMultiplierSquared * relativeSpeed;
+                float u = curand_uniform(&rngState);
+                if (u*u < collisionProbSquared) {
                     float N[3];
                     random_isotropic_vector_device(N, &rngState);
                     relativeSpeed *= 0.5f;
@@ -83,8 +86,6 @@ __global__ void no_time_counter_scheme_kernel(
         }
     }
 
-    // TODO maybe this calculation should be done in row major ordening?
-    // (check warp convergence, and how cuda assigns IDs to 3d thread blocks)
     int tid =
         threadIdx.x * blockDim.y * blockDim.z +
         threadIdx.y * blockDim.z +
@@ -110,13 +111,15 @@ __global__ void no_time_counter_scheme_kernel(
 void collide_particles(Simulation *sim) {
     dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
-        (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
+        (NZ + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
-        (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
+        (NX + threadsPerBlock.z - 1) / threadsPerBlock.z
     );
 
     no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_totalCollisions, sim->d_P, sim->d_cellCount, sim->d_cellList, sim->rngStates
+        sim->d_totalCollisions, sim->d_P, 
+        sim->d_cellCount, sim->d_cellCountPrefixSum, 
+        sim->rngStates
     );
     CHECK_KERNELCALL();
 }

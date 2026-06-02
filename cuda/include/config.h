@@ -1,10 +1,11 @@
 #ifndef DSMC_CONFIG_H
 #define DSMC_CONFIG_H
 
+#include "object.h"
 #include <cuda_runtime.h>
 
-#define MAX_PARTICLES 100000000
-#define MAX_PARTICLES_PER_CELL 1000
+#define MAX_PARTICLES 30000000
+#define MAX_PARTICLES_PER_CELL 750
 #define NX 50
 #define NY 50
 #define NZ 50
@@ -19,10 +20,10 @@ typedef struct {
     double NA;
 
     // size of domain (m)
-    double Lx;
-    double Ly;
-    double Lz;
-    double DL;
+    float Lx;
+    float Ly;
+    float Lz;
+    float DL;
 
     // gas properties
     double molarMass;
@@ -35,33 +36,17 @@ typedef struct {
     int firstSampleStep;
     int samplingPeriod;
 
-    #ifdef WING_CASE
-        // wing
-        float WingX;
-        float WingY;
-        float WingLength;
-        double Tw;
+    // stream
+    float MaFree;
+    float PFree;
+    float TFree;
+    float angleOfAttack;
 
-        // stream
-        double MaFree;
-        double PFree;
-        double TFree;
-        float angleOfAttack;
-    #elif defined(BALL_CASE)
-        // ball 
-        float ballCenterX;
-        float ballCenterY;
-        float ballCenterZ;
-        float ballRadius;
-        double Tb;
+    int wingCnt;
+    Wing wings[3]; // max 3 wings, but can be changed
 
-        float ballRadiusSquared; // derived
-
-        // stream
-        double MaFree;
-        double PFree;
-        double TFree;
-    #endif
+    int ballCnt;
+    Ball balls[3]; // max 3 balls, but can be changed
 
     // VHS model
     double omega;
@@ -69,8 +54,8 @@ typedef struct {
 
     // derived parameters
     double moleculeMass;
-    double dx, dy, dz;
-    double cellVolume;
+    float dx, dy, dz, inv_dx, inv_dy, inv_dz;
+    float cellVolume;
     double weight;
     float NFree;
     float UFree;
@@ -80,6 +65,7 @@ typedef struct {
     double sigmaRef;
     double CrRef;
     double ntcs_collisionProbMultiplier; // used in no time collision scheme
+    double ntcs_collisionProbMultiplierSquared; // used in no time collision scheme
     double ntcs_collidingPairsMultiplier; // used in no time collision scheme
     double ntcs_collisionProbExponent;    // used in no time collision scheme
 
@@ -93,6 +79,6 @@ typedef struct {
 
 extern __constant__ Config d_conf;
 
-void config_setup(Config *config);
+void config_setup(Config *config, int object_case);
 
 #endif //DSMC_CONFIG_H

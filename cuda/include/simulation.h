@@ -29,22 +29,27 @@ typedef struct {
     Cell *samples;    // allocated in host memory (CPU)
     Cell *d_samples;  // allocated in device memory (GPU)
     int *d_cellCount; // allocated in device memory (GPU)
-    int *d_cellList;  // allocated in device memory (GPU)
     int *d_cellCountPrefixSum;
     void *d_temp_storage;
     size_t temp_storage_bytes;
 
+    // for marking and filtering particles
+    int *d_valid;
+    int *d_particleIds;
+    int *d_cellKeys;
+    int *d_cellCountPrefSumCopy;
+
     // counters
     int sampleSteps;
     int NP;
+    int *d_new_NP;  // allocated in device memory (GPU) as a temporary variable to be used
 
     unsigned long long totalCollisions;
     unsigned long long *d_totalCollisions;
 } Simulation;
 
 void setup(Simulation *sim, Config *conf);
-void reorder_particles_by_cell(Simulation *sim);
-void index_particles(Simulation *sim);
+void filter_and_index_particles(Simulation *sim);
 void initialize_particles(Simulation *sim);
 void apply_boundary_conditions_free_stream(Simulation *sim);
 void move_particles(Simulation *sim);
