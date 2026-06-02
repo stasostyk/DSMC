@@ -61,7 +61,6 @@ void setup(Simulation *sim, Config *conf) {
 
     CHECK(cudaMalloc(&sim->d_samples, SAMPLES_SZ));
     CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));
-    CHECK(cudaMalloc(&sim->d_cellList, CELL_LIST_SZ));
     CHECK(cudaMalloc(&sim->d_cellCountPrefixSum, CELL_COUNT_SZ));
 
     CHECK(cudaMalloc(&sim->d_valid, sizeof(int) * MAX_PARTICLES));
@@ -836,7 +835,6 @@ void clearPointers(Simulation *sim) {
 
     CHECK(cudaFree(sim->d_samples));
     CHECK(cudaFree(sim->d_cellCount));
-    CHECK(cudaFree(sim->d_cellList));
     CHECK(cudaFree(sim->d_cellCountPrefixSum));
     CHECK(cudaFree(sim->d_temp_storage));
 
