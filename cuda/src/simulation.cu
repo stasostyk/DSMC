@@ -511,7 +511,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
         float rx = x0 - cx;
         float ry = y0 - cy;
         float rz = z0 - cz;
-
+ 
         // Quadratic coefficients: |r + t d|^2 = R^2
         float a = dx*dx + dy*dy + dz*dz;
         float b = 2.0 * (rx*dx + ry*dy + rz*dz);
