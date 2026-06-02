@@ -45,7 +45,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         int offset = (NPC + 1) / 2;
     
         if (threadIdx.x == 0) {
-            for (int i = tid; i < NPC; i += blockSize) {
+            for (int i = 0; i < NPC; i ++) {
                 // localParticleList[i] =
                 //         cellList[IDX_LIST(blockIdx.x, blockIdx.y, blockIdx.z, i)];
                 localParticleList[i] = particle_id_offset + i;
