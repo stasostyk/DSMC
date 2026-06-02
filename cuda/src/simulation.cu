@@ -393,7 +393,6 @@ void filter_and_index_particles(Simulation *sim) {
     CHECK(cudaMemcpy(sim->d_cellCountPrefSumCopy, sim->d_cellCountPrefixSum,
             sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice));
 
-    // CHECK(cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ));
     counting_sort_scatter_kernel<<<blocksNew, threadsPerBlock>>>(
         sim->d_new_P, sim->d_P,
         sim->d_cellKeys,
@@ -409,56 +408,55 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    float X0 = P.x[i];
-    float Y0 = P.y[i];
-    float Z0 = P.z[i];
-    P.x[i] += d_conf.dt * P.vx[i];
-    P.y[i] += d_conf.dt * P.vy[i];
-    P.z[i] += d_conf.dt * P.vz[i];
+    // initial positions
+    float x0 = P.x[i];
+    float y0 = P.y[i];
+    float z0 = P.z[i];
+
+    // final positions
+    // move this timestamp
+    float x1 = x0 + d_conf.dt * P.vx[i];
+    float y1 = y0 + d_conf.dt * P.vy[i];
+    float z1 = z0 + d_conf.dt * P.vz[i];
 
     curandState rngState = rngStates[i];
 
     // CHECK WINGS
     for (int wingId = 0; wingId < d_conf.wingCnt; wingId++) {
-        float dt = d_conf.dt;
-        double moleculeMass = d_conf.moleculeMass;
-        double Tw = d_conf.wings[wingId].Tw;
-        float WingX = d_conf.wings[wingId].WingX;
         float WingY = d_conf.wings[wingId].WingY;
-        float WingLength = d_conf.wings[wingId].WingLength;
 
-        if ( ( Y0 - WingY ) * ( P.y[i] - WingY ) < 0.0 ) {
+        if ( ( y0 - WingY ) * ( y1 - WingY ) < 0.0 ) {
+            float dt = d_conf.dt;
+            double moleculeMass = d_conf.moleculeMass;
+            double Tw = d_conf.wings[wingId].Tw;
+            float WingX = d_conf.wings[wingId].WingX;
+            float WingLength = d_conf.wings[wingId].WingLength;
             // Linear interpolation to point Y = WingY
-            float Xw=( X0*(WingY-P.y[i])+P.x[i]*(Y0-WingY))/(Y0-P.y[i]);
-            float Zw=( Z0*(WingY-P.y[i])+P.z[i]*(Y0-WingY))/(Y0-P.y[i]);
+            float Xw=( x0*(WingY-y1)+x1*(y0-WingY))/(y0-y1);
+            float Zw=( z0*(WingY-y1)+z1*(y0-WingY))/(y0-y1);
             if ( Zw < 0.3 || Zw > 0.7 ) return; // wing only occupies 0.3 < z < 0.7
             if ( Xw > WingX && Xw < WingX + WingLength ) {
                 // Molecule interacts with the wing during the time step
                 // Linear interpolation of the time of scattering, Eq. (6.5.4)
-                float Dt1 = dt - dt * ( Y0 - WingY ) / ( Y0 - P.y[i] );
+                float Dt1 = dt - dt * ( y0 - WingY ) / ( y0 - y1 );
                 // Generate velocity vector of the reflected molecule
                 diffuse_scattering_y_device(
                     &(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
-                    moleculeMass,Tw,(Y0-WingY>0)?1.0:(-1.0),
+                    moleculeMass,Tw,(y0-WingY>0)?1.0:(-1.0),
                     d_conf.KB,
                     &rngState
                 );
                 // Move the reflected molecule
-                P.x[i] = Xw + Dt1 * P.vx[i];
-                P.y[i] = WingY + Dt1 * P.vy[i];
+                x1 = Xw + Dt1 * P.vx[i];
+                y1 = WingY + Dt1 * P.vy[i];
             }
         }
     }
-
 
     // CHECK BALLS
     for (int ballId = 0; ballId < d_conf.ballCnt; ballId++) {
         // Ray-sphere intersection test
         
-        // Initial and final positions
-        float x0 = X0, y0 = Y0, z0 = Z0;
-        float x1 = P.x[i], y1 = P.y[i], z1 = P.z[i];
-
         // Direction of motion
         float dx = x1 - x0;
         float dy = y1 - y0;
@@ -516,12 +514,17 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
                             );
 
                 // Move after collision
-                P.x[i] = Xw + Dt1 * P.vx[i];
-                P.y[i] = Yw + Dt1 * P.vy[i];
-                P.z[i] = Zw + Dt1 * P.vz[i];
+                x1 = Xw + Dt1 * P.vx[i];
+                y1 = Yw + Dt1 * P.vy[i];
+                z1 = Zw + Dt1 * P.vz[i];
             }
         }
     }
+
+    // save final positions
+    P.x[i] = x1;
+    P.y[i] = y1;
+    P.z[i] = z1;
 
     rngStates[i] = rngState;
 }
