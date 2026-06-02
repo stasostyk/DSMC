@@ -20,10 +20,10 @@ typedef struct {
     double NA;
 
     // size of domain (m)
-    double Lx;
-    double Ly;
-    double Lz;
-    double DL;
+    float Lx;
+    float Ly;
+    float Lz;
+    float DL;
 
     // gas properties
     double molarMass;
@@ -37,9 +37,9 @@ typedef struct {
     int samplingPeriod;
 
     // stream
-    double MaFree;
-    double PFree;
-    double TFree;
+    float MaFree;
+    float PFree;
+    float TFree;
     float angleOfAttack;
 
     int wingCnt;
@@ -54,8 +54,8 @@ typedef struct {
 
     // derived parameters
     double moleculeMass;
-    double dx, dy, dz;
-    double cellVolume;
+    float dx, dy, dz;
+    float cellVolume;
     double weight;
     float NFree;
     float UFree;
