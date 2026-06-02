@@ -9,7 +9,8 @@
 #include <curand_kernel.h>
 
 __global__ void no_time_counter_scheme_kernel(
-    unsigned long long *total_collisions, Particles P, int *cellCount, int *cellList, curandState *rngStates
+    unsigned long long *total_collisions, 
+    Particles P, int *cellCount, int *cellCountPrefixSum, curandState *rngStates
 ) {
     __shared__ int collisionsBlock[64];
 
@@ -25,7 +26,10 @@ __global__ void no_time_counter_scheme_kernel(
         int NPC = cellCount[idx];
         if (NPC >= 2 && NPC < d_conf.hss_threshold) {
 
-            int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
+            // int *IPC = &cellList[IDX_LIST(k, l, m, 0)];
+
+            // Particles for this cell are contiguous starting at this offset
+            int offset = cellCountPrefixSum[idx];
 
             curandState rngState = rngStates[idx];
 
@@ -41,10 +45,12 @@ __global__ void no_time_counter_scheme_kernel(
                 int j_offset = (int)(curand_uniform(&rngState) * (NPC - 1));
                 int j_local = (i_local + 1 + j_offset) % NPC;
 
-                
-                // two particles to collide
-                int i = IPC[i_local];
-                int j = IPC[j_local];
+                int i = i_local + offset;
+                int j = j_local + offset;
+
+                // // two particles to collide
+                // int i = IPC[i_local];
+                // int j = IPC[j_local];
 
                 float vx_i = P.vx[i];
                 float vy_i = P.vy[i];
@@ -54,10 +60,10 @@ __global__ void no_time_counter_scheme_kernel(
                 float vy_j = P.vy[j];
                 float vz_j = P.vz[j];
 
-                float relativeVel[3] = { vx_j - vx_i, vy_j - vy_i, vz_j - vz_i };
-                float relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
-                                            + relativeVel[1] * relativeVel[1]
-                                            + relativeVel[2] * relativeVel[2]);
+                float dvx = vx_j - vx_i;
+                float dvy = vy_j - vy_i;
+                float dvz = vz_j - vz_i;
+                float relativeSpeed = sqrt(dvx * dvx, dvy * dvy, dvz * dvz);
 
                 // The real value to be calculated:
                 // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
@@ -115,7 +121,9 @@ void collide_particles(Simulation *sim) {
     );
 
     no_time_counter_scheme_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_totalCollisions, sim->d_P, sim->d_cellCount, sim->d_cellList, sim->rngStates
+        sim->d_totalCollisions, sim->d_P, 
+        sim->d_cellCount, sim->d_cellCountPrefixSum, 
+        sim->rngStates
     );
     CHECK_KERNELCALL();
 }

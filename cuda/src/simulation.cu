@@ -525,6 +525,15 @@ void filter_and_index_particles(Simulation *sim) {
 
     sim->NP = h_newNP;
 
+    // THEN COUNT PREF SUMS
+    cub::DeviceScan::ExclusiveSum(
+        sim->d_temp_storage,
+        sim->temp_storage_bytes,
+        sim->d_cellCount,
+        sim->d_cellCountPrefixSum,
+        NX * NY * NZ
+    );
+
     // CHECK(cudaMemset(sim->d_new_NP, 0, sizeof(int)));
 
     // filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
