@@ -63,7 +63,7 @@ __global__ void no_time_counter_scheme_kernel(
                 float dvx = vx_j - vx_i;
                 float dvy = vy_j - vy_i;
                 float dvz = vz_j - vz_i;
-                float relativeSpeed = sqrt(dvx * dvx, dvy * dvy, dvz * dvz);
+                float relativeSpeed = sqrt(dvx * dvx + dvy * dvy + dvz * dvz);
 
                 // The real value to be calculated:
                 // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
