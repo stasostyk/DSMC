@@ -25,7 +25,6 @@ __global__ void ntcs_persistent_kernel(
     while (true) {
         // Grab next cell from queue — one cell per thread
         // unsigned int cellQueueIdx = atomicAdd(workQueueHead, 1);
-        // if (cellQueueIdx >= totalCells) break;
 
         // Replaced the single atomicAdd with warp-aggregated version:
         unsigned int cellQueueIdx;
@@ -97,6 +96,10 @@ __global__ void ntcs_persistent_kernel(
             }
 
         }
+
+        cellQueueIdx += 31 - (threadIdx.x % 32);  // each lane gets its own index
+
+        if (cellQueueIdx >= totalCells) break;
     }
 
     rngStates[true_tid] = rngState;
