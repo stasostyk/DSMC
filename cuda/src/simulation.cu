@@ -414,7 +414,9 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
 }
 
 __global__ void scatter_and_key_kernel(
-    Particles P, Particles P_out, int *valid, int *particleIds, int *cellKeys, int NP
+    Particles P, Particles P_out, int *valid, int *particleIds, 
+    int *cellKeys, int *cellCount,
+    int NP
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
@@ -440,7 +442,9 @@ __global__ void scatter_and_key_kernel(
     int l = __float2int_rd(y * d_conf.inv_dy);
     int m = __float2int_rd(z * d_conf.inv_dz);
 
-    cellKeys[j] = IDX_CELL(k,l,m);
+    int cell = IDX_CELL(k,l,m);
+    cellKeys[j] = cell;
+    atomicAdd(&cellCount[cell], 1);
 }
 
 // __global__ void gather_kernel(
@@ -464,13 +468,13 @@ __global__ void scatter_and_key_kernel(
 //     atomicAdd(&cellCount[sortedCellKeys[i]], 1);
 // }
 
-__global__ void rebuild_cell_count_kernel(
-    int *sortedCellKeys, int *cellCount, int NP
-) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= NP) return;
-    atomicAdd(&cellCount[sortedCellKeys[i]], 1);
-}
+// __global__ void rebuild_cell_count_kernel(
+//     int *sortedCellKeys, int *cellCount, int NP
+// ) {
+//     int i = blockIdx.x * blockDim.x + threadIdx.x;
+//     if (i >= NP) return;
+//     atomicAdd(&cellCount[sortedCellKeys[i]], 1);
+// }
 
 // Already have cellCount from scatter_and_key_kernel (you compute cellKeys[j] there)
 // Step 1: prefix sum over cellCount → gives start offset per cell  
@@ -496,7 +500,6 @@ __global__ void counting_sort_scatter_kernel(
     P_out.vy[dest] = P_in.vy[i];
     P_out.vz[dest] = P_in.vz[i];
 
-    // atomicAdd(&cellCount[cell], 1);
 }
 
 void filter_and_index_particles(Simulation *sim) {
@@ -524,23 +527,26 @@ void filter_and_index_particles(Simulation *sim) {
     CHECK(cudaMemcpy(&h_lastValid, sim->d_valid + sim->NP - 1,
                sizeof(int), cudaMemcpyDeviceToHost));
     int h_newNP = h_lastPrefixVal + h_lastValid;
+   
+    cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
 
     scatter_and_key_kernel<<<blocksPerGrid, threadsPerBlock>>>(
         sim->d_P, sim->d_new_P,
         sim->d_valid, sim->d_particleIds,
-        sim->d_cellKeys, sim->NP
+        sim->d_cellKeys, 
+        sim->d_cellCount
+        sim->NP
     );
     CHECK_KERNELCALL();
 
     // DO SORT
 
-    cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
 
     dim3 blocksNew((h_newNP + threads - 1) / threads, 1, 1);
-    rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
-        sim->d_cellKeys, sim->d_cellCount, h_newNP
-    );
-    CHECK_KERNELCALL();
+    // rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
+    //     sim->d_cellKeys, sim->d_cellCount, h_newNP
+    // );
+    // CHECK_KERNELCALL();
 
     cub::DeviceScan::ExclusiveSum(
         sim->d_temp_storage, sim->temp_storage_bytes,
