@@ -40,8 +40,6 @@ typedef struct {
     int *d_particleIdsSorted;
     int *d_cellKeys;
     int *d_cellKeysSorted;
-    void *d_temp_storage_valid_particles;
-    size_t temp_storage_bytes_valid_particles;
 
     // counters
     int sampleSteps;
