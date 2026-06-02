@@ -34,6 +34,13 @@ typedef struct {
     void *d_temp_storage;
     size_t temp_storage_bytes;
 
+    // for marking and filtering particles
+    int *d_valid;
+    int *d_particleIds;
+    int *d_cellKeys;
+    void *d_temp_storage_valid_particles;
+    size_t temp_storage_bytes_valid_particles;
+
     // counters
     int sampleSteps;
     int NP;

@@ -11,13 +11,11 @@
 #include "../include/cuda_utils.h"
 
 void move_neccessary_data_before_printing(Simulation *sim) {
-    printf("Current particle count: %d\n", sim->NP);
-
     // Particle data is mostly stored in and dealt in GPU, 
     // to have the newest version in CPU, it needs to be copied.
+   
     CHECK(cudaMemcpy(&sim->totalCollisions, sim->d_totalCollisions, sizeof(unsigned long long), cudaMemcpyDeviceToHost))
-//    CHECK(cudaMemcpy(sim->P, sim->d_P, sim->NP * 6 * sizeof(double), cudaMemcpyDeviceToHost));
-//
+
     CHECK(cudaMemcpy(sim->P.x, sim->d_P.x, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK(cudaMemcpy(sim->P.y, sim->d_P.y, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK(cudaMemcpy(sim->P.z, sim->d_P.z, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));

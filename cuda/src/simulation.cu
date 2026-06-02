@@ -62,6 +62,10 @@ void setup(Simulation *sim, Config *conf) {
     CHECK(cudaMalloc(&sim->d_cellList, CELL_LIST_SZ));
     CHECK(cudaMalloc(&sim->d_cellCountPrefixSum, CELL_COUNT_SZ));
 
+    CHECK(cudaMalloc(&sim->d_valid, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&sim->d_particleIds, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&sim->d_cellKeys, CELL_COUNT_SZ));
+
     sim->temp_storage_bytes = 0;
     sim->d_temp_storage = nullptr;
 
@@ -72,6 +76,17 @@ void setup(Simulation *sim, Config *conf) {
         sim->d_cellCountPrefixSum, 
         NX*NY*NZ);
     cudaMalloc(&sim->d_temp_storage, sim->temp_storage_bytes);
+
+    sim->temp_storage_bytes_valid_particles = 0;
+    sim->d_temp_storage_valid_particles = nullptr;
+    cub::DeviceScan::ExclusiveSum(
+        sim->d_temp_storage_valid_particles,
+        sim->temp_storage_bytes_valid_particles,
+        sim->d_valid,
+        sim->d_particleIds,
+        MAX_PARTICLES
+    );
+    cudaMalloc(&sim->d_temp_storage_valid_particles, sim->temp_storage_bytes_valid_particles);
 
     sim->sampleSteps = 0;
     sim->NP = 0;
@@ -144,7 +159,7 @@ void reorder_particles_by_cell(Simulation *sim) {
 }
 
 __global__ void bin_particles_kernel(
-    Particles P, int *cellCount, int *cellList, int NP
+    Particles P, int *cellCount, int *cellList, int *cellKeys, int NP
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
@@ -153,7 +168,9 @@ __global__ void bin_particles_kernel(
     int l = __float2int_rd(P.y[i] * d_conf.inv_dy);
     int m = __float2int_rd(P.z[i] * d_conf.inv_dz);
 
-    int n = atomicAdd(&cellCount[IDX_CELL(k, l, m)], 1);
+    int j = cellKeys[i];
+
+    int n = atomicAdd(&cellCount[j], 1);
     cellList[IDX_LIST(k, l, m, n)] = i;
 }
 
@@ -164,7 +181,7 @@ void index_particles(Simulation *sim) {
     dim3 threadsPerBlock2(thr, 1, 1);
     dim3 blocksPerGrid2((sim->NP + thr - 1) / thr, 1, 1);
     bin_particles_kernel<<<blocksPerGrid2, threadsPerBlock2>>>(
-        sim->d_P, sim->d_cellCount, sim->d_cellList, sim->NP
+        sim->d_P, sim->d_cellCount, sim->d_cellList, sim->d_cellKeys, sim->NP
     );
     CHECK_KERNELCALL();
 }
@@ -256,6 +273,16 @@ void generate_particles_in_rect(
     sim->NP += Nnew;
 }
 
+__global__ void mark_valid_kernel(Particles P, int *valid, int NP) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+
+    valid[i] =
+        (P.x[i] >= 0.0f && P.x[i] < d_conf.Lx &&
+         P.y[i] >= 0.0f && P.y[i] < d_conf.Ly &&
+         P.z[i] >= 0.0f && P.z[i] < d_conf.Lz);
+}
+
 // Removes the particles that were created inside the balls.
 // This is called only once, at the initialization of the 
 // particles inside the whole volume, which happens before
@@ -318,31 +345,31 @@ void initialize_particles(Simulation *sim) {
     remove_particles_inside_balls(sim);
 }
 
-__global__ void filter_particles_out_of_bounds(
-    Particles P, Particles P_out, int NP, int *new_NP
-) {
-    // TODO this can be possibly optimized:
-    // 1st kernel: mark the particles true/false if they need to be removed
-    // 2nd kernel: scan/prefix sum 
-    // 3rd kernel: (scatter) collect valid particles
+// __global__ void filter_particles_out_of_bounds(
+//     Particles P, Particles P_out, int NP, int *new_NP
+// ) {
+//     // TODO this can be possibly optimized:
+//     // 1st kernel: mark the particles true/false if they need to be removed
+//     // 2nd kernel: scan/prefix sum 
+//     // 3rd kernel: (scatter) collect valid particles
 
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= NP) return;
+//     int i = blockIdx.x * blockDim.x + threadIdx.x;
+//     if (i >= NP) return;
 
-    // check if particle valid
-    if (P.x[i] >= 0.0 && P.x[i] < d_conf.Lx &&
-        P.y[i] >= 0.0 && P.y[i] < d_conf.Ly &&
-        P.z[i] >= 0.0 && P.z[i] < d_conf.Lz
-    ) {
-        int pos = atomicAdd(new_NP, 1);
-        P_out.x[pos] = P.x[i];
-        P_out.y[pos] = P.y[i];
-        P_out.z[pos] = P.z[i];
-        P_out.vx[pos] = P.vx[i];
-        P_out.vy[pos] = P.vy[i];
-        P_out.vz[pos] = P.vz[i];
-    }
-}
+//     // check if particle valid
+//     if (P.x[i] >= 0.0 && P.x[i] < d_conf.Lx &&
+//         P.y[i] >= 0.0 && P.y[i] < d_conf.Ly &&
+//         P.z[i] >= 0.0 && P.z[i] < d_conf.Lz
+//     ) {
+//         int pos = atomicAdd(new_NP, 1);
+//         P_out.x[pos] = P.x[i];
+//         P_out.y[pos] = P.y[i];
+//         P_out.z[pos] = P.z[i];
+//         P_out.vx[pos] = P.vx[i];
+//         P_out.vy[pos] = P.vy[i];
+//         P_out.vz[pos] = P.vz[i];
+//     }
+// }
 
 void apply_boundary_conditions_free_stream(Simulation *sim) {
     Config *conf = sim->conf;
@@ -354,24 +381,76 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, 1);
 }
 
+__global__ void scatter_and_key_kernel(
+    Particles P, Particles P_out, int *valid, int *particleIds, int *cellKeys, int NP
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+
+    if (!valid[i]) return;
+
+    int j = particleIds[i];
+
+    float x = P.x[i];
+    float y = P.y[i];
+    float z = P.z[i];
+
+    // write compact particle
+    P_out.x[j]  = x;
+    P_out.y[j]  = y;
+    P_out.z[j]  = z;
+    P_out.vx[j] = P.vx[i];
+    P_out.vy[j] = P.vy[i];
+    P_out.vz[j] = P.vz[i];
+
+    // compute cell key
+    int k = __float2int_rd(x * d_conf.inv_dx);
+    int l = __float2int_rd(y * d_conf.inv_dy);
+    int m = __float2int_rd(z * d_conf.inv_dz);
+
+    cellKeys[j] = IDX_CELL(k,l,m);
+}
+
 // Filters particles out of bounds and 
 void filter_out_of_bounds(Simulation *sim) {
     int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    CHECK(cudaMemset(sim->d_new_NP, 0, sizeof(int)));
+    mark_valid_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->d_valid, sim->NP);
 
-    filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_P, sim->d_new_P, sim->NP, sim->d_new_NP
+    // valid -> particle new index map
+    cub::DeviceScan::ExclusiveSum(
+        sim->d_temp_storage_valid_particles,
+        sim->temp_storage_bytes_valid_particles,
+        sim->d_valid,
+        sim->d_particleIds,
+        sim->NP
     );
-    CHECK_KERNELCALL();
 
-    int host_new_NP;
-    CHECK(cudaMemcpy(&host_new_NP, sim->d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
-    sim->NP = host_new_NP;
-    
+    int h_newNP;
+    cudaMemcpy(&h_newNP, sim->d_particleIds + sim->NP - 1, sizeof(int), cudaMemcpyDeviceToHost);
+
+    scatter_and_key_kernel<<<blocksPerGrid, threadsPerBlock>>>(
+        sim->d_P, sim->d_new_P, sim->d_valid, sim->d_particleIds, sim->d_cellKeys, sim->NP
+    );
+
     swap_particles_with_new(sim);
+
+    sim->NP = h_newNP;
+
+    // CHECK(cudaMemset(sim->d_new_NP, 0, sizeof(int)));
+
+    // filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
+    //     sim->d_P, sim->d_new_P, sim->NP, sim->d_new_NP
+    // );
+    // CHECK_KERNELCALL();
+
+    // int host_new_NP;
+    // CHECK(cudaMemcpy(&host_new_NP, sim->d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
+    // sim->NP = host_new_NP;
+    
+    // swap_particles_with_new(sim);
 }
 
 __global__ void move_particles_kernel(Particles P, int NP, curandState *rngStates) {
@@ -586,4 +665,8 @@ void clearPointers(Simulation *sim) {
 
     CHECK(cudaFree(sim->d_totalCollisions));
     CHECK(cudaFree(sim->d_new_NP));
+
+    CHECK(cudaFree(sim->d_valid));
+    CHECK(cudaFree(sim->d_particleIds));
+    CHECK(cudaFree(sim->d_cellKeys));
 }
