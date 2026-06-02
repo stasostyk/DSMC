@@ -439,6 +439,7 @@ __global__ void scatter_and_key_kernel(
 __global__ void gather_kernel(
     Particles P_in, Particles P_out,
     int *sortedIds,          // output of SortPairs: particle indices in cell order
+    int *sortedCellKeys, int *cellCount,
     int NP
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -452,18 +453,12 @@ __global__ void gather_kernel(
     P_out.vx[i] = P_in.vx[src];
     P_out.vy[i] = P_in.vy[src];
     P_out.vz[i] = P_in.vz[src];
-}
 
-__global__ void rebuild_cell_count_kernel(
-    int *sortedCellKeys, int *cellCount, int NP
-) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= NP) return;
     atomicAdd(&cellCount[sortedCellKeys[i]], 1);
 }
 
 void filter_and_index_particles(Simulation *sim) {
-    int threads = 256;
+    int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
@@ -522,13 +517,8 @@ void filter_and_index_particles(Simulation *sim) {
     gather_kernel<<<blocksNew, threadsPerBlock>>>(
         sim->d_new_P, sim->d_P,          // src=compacted, dst=final
         sim->d_particleIdsSorted,
+        sim->d_cellKeysSorted, sim->d_cellCount,
         h_newNP
-    );
-    CHECK_KERNELCALL();
-
-    // rebuild cellCount from the sorted keys
-    rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
-        sim->d_cellKeysSorted, sim->d_cellCount, h_newNP
     );
     CHECK_KERNELCALL();
 
