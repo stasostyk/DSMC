@@ -65,8 +65,8 @@ int main(int argc, char **argv) {
     for (int step = 0; step < conf.nSteps; step++) {
         move_particles(&sim);
         apply_boundary_conditions_free_stream(&sim);
-        filter_out_of_bounds(&sim);
-        index_particles(&sim);
+        filter_and_index_particles(&sim);
+        // index_particles(&sim);
 
         // if (step % 20 == 0) {
         //     // printf("Reordering particles for better memory access...\n");

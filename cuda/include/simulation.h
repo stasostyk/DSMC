@@ -9,6 +9,7 @@
 
 #define IDX_CELL(k, l, m) ((k)*NY*NZ + (l)*NZ + m)
 #define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + q)
+#define IDX_LIST_FLAT(cell, q) ((cell) * MAX_PARTICLES_PER_CELL + (q))
 
 typedef struct {
     // for using randomness in GPU
@@ -37,7 +38,9 @@ typedef struct {
     // for marking and filtering particles
     int *d_valid;
     int *d_particleIds;
+    int *d_particleIdsSorted;
     int *d_cellKeys;
+    int *d_cellKeysSorted;
     void *d_temp_storage_valid_particles;
     size_t temp_storage_bytes_valid_particles;
 
@@ -52,8 +55,8 @@ typedef struct {
 
 void setup(Simulation *sim, Config *conf);
 void reorder_particles_by_cell(Simulation *sim);
-void filter_out_of_bounds(Simulation *sim);
-void index_particles(Simulation *sim);
+void filter_and_index_particles(Simulation *sim);
+// void index_particles(Simulation *sim);
 void initialize_particles(Simulation *sim);
 void apply_boundary_conditions_free_stream(Simulation *sim);
 void move_particles(Simulation *sim);

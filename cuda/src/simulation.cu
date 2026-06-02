@@ -9,6 +9,8 @@
 #include "../include/math_utils.h"
 #include "../include/cuda_utils.h"
 #include <cub/cub.cuh>
+#include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
 
 void swap_particles_with_new(Simulation *sim) {
     // swap d_P and d_new_P
@@ -64,7 +66,9 @@ void setup(Simulation *sim, Config *conf) {
 
     CHECK(cudaMalloc(&sim->d_valid, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&sim->d_particleIds, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&sim->d_particleIdsSorted, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&sim->d_cellKeys, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&sim->d_cellKeysSorted, sizeof(int) * MAX_PARTICLES));
 
     sim->temp_storage_bytes = 0;
     sim->d_temp_storage = nullptr;
@@ -158,33 +162,33 @@ void reorder_particles_by_cell(Simulation *sim) {
     sim->d_new_P = temp;
 }
 
-__global__ void bin_particles_kernel(
-    Particles P, int *cellCount, int *cellList, int *cellKeys, int NP
-) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= NP) return;
+// __global__ void bin_particles_kernel(
+//     Particles P, int *cellCount, int *cellList, int *cellKeys, int NP
+// ) {
+//     int i = blockIdx.x * blockDim.x + threadIdx.x;
+//     if (i >= NP) return;
 
-    int k = __float2int_rd(P.x[i] * d_conf.inv_dx);
-    int l = __float2int_rd(P.y[i] * d_conf.inv_dy);
-    int m = __float2int_rd(P.z[i] * d_conf.inv_dz);
+//     int k = __float2int_rd(P.x[i] * d_conf.inv_dx);
+//     int l = __float2int_rd(P.y[i] * d_conf.inv_dy);
+//     int m = __float2int_rd(P.z[i] * d_conf.inv_dz);
 
-    int j = cellKeys[i];
+//     int j = cellKeys[i];
 
-    int n = atomicAdd(&cellCount[j], 1);
-    cellList[IDX_LIST(k, l, m, n)] = i;
-}
+//     int n = atomicAdd(&cellCount[j], 1);
+//     cellList[IDX_LIST(k, l, m, n)] = i;
+// }
 
-void index_particles(Simulation *sim) {
-    cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
+// void index_particles(Simulation *sim) {
+//     cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
 
-    int thr = 128;
-    dim3 threadsPerBlock2(thr, 1, 1);
-    dim3 blocksPerGrid2((sim->NP + thr - 1) / thr, 1, 1);
-    bin_particles_kernel<<<blocksPerGrid2, threadsPerBlock2>>>(
-        sim->d_P, sim->d_cellCount, sim->d_cellList, sim->d_cellKeys, sim->NP
-    );
-    CHECK_KERNELCALL();
-}
+//     int thr = 128;
+//     dim3 threadsPerBlock2(thr, 1, 1);
+//     dim3 blocksPerGrid2((sim->NP + thr - 1) / thr, 1, 1);
+//     bin_particles_kernel<<<blocksPerGrid2, threadsPerBlock2>>>(
+//         sim->d_P, sim->d_cellCount, sim->d_cellList, sim->d_cellKeys, sim->NP
+//     );
+//     CHECK_KERNELCALL();
+// }
 
 __global__ void generate_particles_in_rect_kernel(
     Particles P,
@@ -411,13 +415,40 @@ __global__ void scatter_and_key_kernel(
     cellKeys[j] = IDX_CELL(k,l,m);
 }
 
-// Filters particles out of bounds and 
-void filter_out_of_bounds(Simulation *sim) {
+__global__ void gather_and_bin_kernel(
+    Particles P_in, Particles P_out,
+    int *sortedIds,          // output of SortPairs: particle indices in cell order
+    int *sortedCellKeys,     // output of SortPairs: cell keys in sorted order
+    int *cellCount,
+    int *cellList,
+    int NP
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+
+    int src = sortedIds[i];   // which compacted particle goes to slot i
+
+    P_out.x[i]  = P_in.x[src];
+    P_out.y[i]  = P_in.y[src];
+    P_out.z[i]  = P_in.z[src];
+    P_out.vx[i] = P_in.vx[src];
+    P_out.vy[i] = P_in.vy[src];
+    P_out.vz[i] = P_in.vz[src];
+
+    // rebuild cell occupancy
+    int cell = sortedCellKeys[i];
+    int slot = atomicAdd(&cellCount[cell], 1);
+    cellList[IDX_LIST_FLAT(cell, slot)];  // see note below
+    cellList[cell * MAX_PARTICLES_PER_CELL + slot] = i;  // new position is i
+}
+
+void filter_and_index_particles(Simulation *sim) {
     int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
     mark_valid_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->d_valid, sim->NP);
+    CHECK_KERNELCALL();
 
     // valid -> particle new index map
     cub::DeviceScan::ExclusiveSum(
@@ -428,14 +459,65 @@ void filter_out_of_bounds(Simulation *sim) {
         sim->NP
     );
 
-    int h_newNP;
-    cudaMemcpy(&h_newNP, sim->d_particleIds + sim->NP - 1, sizeof(int), cudaMemcpyDeviceToHost);
+    int h_lastPrefixVal, h_lastValid;
+    cudaMemcpy(&h_lastPrefixVal, sim->d_particleIds + sim->NP - 1,
+               sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(&h_lastValid, sim->d_valid + sim->NP - 1,
+               sizeof(int), cudaMemcpyDeviceToHost);
+    int h_newNP = h_lastPrefixVal + h_lastValid;
 
     scatter_and_key_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_P, sim->d_new_P, sim->d_valid, sim->d_particleIds, sim->d_cellKeys, sim->NP
+        sim->d_P, sim->d_new_P,
+        sim->d_valid, sim->d_particleIds,
+        sim->d_cellKeys, sim->NP
+    );
+    CHECK_KERNELCALL();
+
+    size_t sort_temp_bytes = 0;
+    cub::DeviceRadixSort::SortPairs(
+        nullptr, sort_temp_bytes,
+        sim->d_cellKeys, sim->d_cellKeysSorted,
+        sim->d_particleIds, sim->d_particleIdsSorted,  // repurpose as value buffer
+        h_newNP
+    );
+    // Reallocate if needed (lazy resize)
+    if (sort_temp_bytes > sim->temp_storage_bytes_valid_particles) {
+        cudaFree(sim->d_temp_storage_valid_particles);
+        cudaMalloc(&sim->d_temp_storage_valid_particles, sort_temp_bytes);
+        sim->temp_storage_bytes_valid_particles = sort_temp_bytes;
+    }
+
+    // Values to sort: we want particle positions (0..h_newNP-1) 
+    // so we can gather them in cell order.
+    // Re-initialize d_particleIds as 0,1,2,...,h_newNP-1
+    thrust::sequence(
+        thrust::device,
+        sim->d_particleIds,
+        sim->d_particleIds + h_newNP
     );
 
-    swap_particles_with_new(sim);
+    cub::DeviceRadixSort::SortPairs(
+        sim->d_temp_storage_valid_particles,
+        sim->temp_storage_bytes_valid_particles,
+        sim->d_cellKeys,          // keys in  (cell index of compacted particle i)
+        sim->d_cellKeysSorted,    // keys out
+        sim->d_particleIds,       // values in  (0,1,2,...,h_newNP-1)
+        sim->d_particleIdsSorted, // values out (permutation)
+        h_newNP
+    );
+
+    cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
+
+    dim3 blocksNew((h_newNP + threads - 1) / threads, 1, 1);
+    gather_and_bin_kernel<<<blocksNew, threadsPerBlock>>>(
+        sim->d_new_P, sim->d_P,          // src=compacted, dst=final
+        sim->d_particleIdsSorted,
+        sim->d_cellKeysSorted,
+        sim->d_cellCount,
+        sim->d_cellList,
+        h_newNP
+    );
+    CHECK_KERNELCALL();
 
     sim->NP = h_newNP;
 
@@ -668,5 +750,7 @@ void clearPointers(Simulation *sim) {
 
     CHECK(cudaFree(sim->d_valid));
     CHECK(cudaFree(sim->d_particleIds));
+    CHECK(cudaFree(sim->d_particleIdsSorted));
     CHECK(cudaFree(sim->d_cellKeys));
+    CHECK(cudaFree(sim->d_cellKeysSorted));
 }
