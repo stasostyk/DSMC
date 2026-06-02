@@ -438,7 +438,7 @@ __global__ void gather_and_bin_kernel(
     // rebuild cell occupancy
     int cell = sortedCellKeys[i];
     int slot = atomicAdd(&cellCount[cell], 1);
-    cellList[IDX_LIST_FLAT(cell, slot)];  // see note below
+    // cellList[IDX_LIST_FLAT(cell, slot)];  // see note below
     cellList[cell * MAX_PARTICLES_PER_CELL + slot] = i;  // new position is i
 }
 
