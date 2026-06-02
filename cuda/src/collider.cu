@@ -124,7 +124,7 @@ void collide_particles(Simulation *sim) {
     int numSMs;
     cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
     int threadsPerBlock = 64;
-    int blocks = numSMs * 2;  // 4 waves per SM keeps the queue hot
+    int blocks = numSMs;  // 4 waves per SM keeps the queue hot
 
     ntcs_persistent_kernel<<<blocks, threadsPerBlock>>>(
         sim->d_totalCollisions, sim->d_P,
