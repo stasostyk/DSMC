@@ -501,8 +501,8 @@ void filter_and_index_particles(Simulation *sim) {
     );
 
     cub::DeviceRadixSort::SortPairs(
-        sim->d_temp_storage_valid_particles,
-        sim->temp_storage_bytes_valid_particles,
+        sim->d_temp_storage,
+        sim->temp_storage_bytes,
         sim->d_cellKeys,          // keys in  (cell index of compacted particle i)
         sim->d_cellKeysSorted,    // keys out
         sim->d_particleIds,       // values in  (0,1,2,...,h_newNP-1)
