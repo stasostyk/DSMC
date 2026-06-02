@@ -29,6 +29,8 @@ void setup(Simulation *sim, Config *conf) {
     memcpy(sim->conf, conf, sizeof(Config));
     CHECK(cudaMemcpyToSymbol(d_conf, conf, sizeof(Config)));
 
+    CHECK(cudaMalloc(&(sim->d_new_NP), sizeof(int)));
+
     // initialize the SoA
     sim->P.x = (float *)malloc(PARTICLES_FIELD_SZ);
     sim->P.y = (float *)malloc(PARTICLES_FIELD_SZ);
@@ -297,22 +299,18 @@ void remove_particles_inside_balls(Simulation *sim) {
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    int *d_new_NP;
-    CHECK(cudaMalloc(&d_new_NP, sizeof(int)));
-    CHECK(cudaMemset(d_new_NP, 0, sizeof(int)));
+    CHECK(cudaMemset(&(sim->d_new_NP), 0, sizeof(int)));
 
     filter_particles_inside_ball<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_P, sim->d_new_P, sim->NP, d_new_NP
+        sim->d_P, sim->d_new_P, sim->NP, sim->d_new_NP
     );
     CHECK_KERNELCALL();
 
     int host_new_NP;
-    CHECK(cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(&host_new_NP, sim->d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
     sim->NP = host_new_NP;
     
     swap_particles_with_new(sim);
-
-    CHECK(cudaFree(d_new_NP));
 }
 
 void initialize_particles(Simulation *sim) {
@@ -365,22 +363,18 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    int *d_new_NP;
-    CHECK(cudaMalloc(&d_new_NP, sizeof(int)));
-    CHECK(cudaMemset(d_new_NP, 0, sizeof(int)));
+    CHECK(cudaMemset(&(sim->d_new_NP), 0, sizeof(int)));
 
     filter_particles_out_of_bounds<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_P, sim->d_new_P, sim->NP, d_new_NP
+        sim->d_P, sim->d_new_P, sim->NP, sim->d_new_NP
     );
     CHECK_KERNELCALL();
 
     int host_new_NP;
-    CHECK(cudaMemcpy(&host_new_NP, d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(&host_new_NP, sim->d_new_NP, sizeof(int), cudaMemcpyDeviceToHost));
     sim->NP = host_new_NP;
     
     swap_particles_with_new(sim);
-
-    CHECK(cudaFree(d_new_NP));
 }
 
 __global__ void move_particles_kernel(Particles P, int NP, curandState *rngStates) {
@@ -594,4 +588,5 @@ void clearPointers(Simulation *sim) {
     CHECK(cudaFree(sim->d_temp_storage));
 
     CHECK(cudaFree(sim->d_totalCollisions));
+    CHECK(cudaFree(sim->d_new_NP));
 }

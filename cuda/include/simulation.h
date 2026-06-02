@@ -37,6 +37,7 @@ typedef struct {
     // counters
     int sampleSteps;
     int NP;
+    int *d_new_NP;  // allocated in device memory (GPU) as a temporary variable to be used
 
     unsigned long long totalCollisions;
     unsigned long long *d_totalCollisions;
