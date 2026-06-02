@@ -534,7 +534,7 @@ void filter_and_index_particles(Simulation *sim) {
         sim->d_P, sim->d_new_P,
         sim->d_valid, sim->d_particleIds,
         sim->d_cellKeys, 
-        sim->d_cellCount
+        sim->d_cellCount,
         sim->NP
     );
     CHECK_KERNELCALL();
