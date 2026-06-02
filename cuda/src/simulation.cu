@@ -10,6 +10,11 @@
 #include "../include/cuda_utils.h"
 #include <cub/cub.cuh>
 
+#include <thrust/sequence.h>
+#include <thrust/sort.h>
+#include <thrust/execution_policy.h>  
+#include <thrust/device_ptr.h>
+
 void swap_particles_with_new(Simulation *sim) {
     Particles temp = sim->d_P;
     sim->d_P = sim->d_new_P;
@@ -66,6 +71,11 @@ void setup(Simulation *sim, Config *conf) {
     CHECK(cudaMalloc(&sim->d_particleIds, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&sim->d_cellKeys, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&sim->d_cellCountPrefSumCopy, max(CELL_COUNT_SZ, sizeof(int) * MAX_PARTICLES)));
+
+    CHECK(cudaMalloc(&sim->d_sortedCells, CELL_COUNT_SZ));
+    CHECK(cudaMalloc(&sim->d_cellCountSorted, CELL_COUNT_SZ));
+
+    CHECK(cudaMalloc(&sim->d_workQueueHead, sizeof(unsigned int)));
 
     sim->temp_storage_bytes = 0;
     sim->d_temp_storage = nullptr;
@@ -389,6 +399,35 @@ void filter_and_index_particles(Simulation *sim) {
         NX * NY * NZ
     );
 
+    // SORT CELL COUNTS (FOR COLLISIONS)
+    int totalCells = NX * NY * NZ;
+
+    // Re-initialize keys 0..totalCells-1 each step since sort is destructive
+    thrust::sequence(
+        thrust::device,
+        sim->d_sortedCells,
+        sim->d_sortedCells + totalCells,
+        0
+    );
+
+    // Copy counts into scratch (sort_by_key destroys the key array)
+    CHECK(cudaMemcpy(
+        sim->d_cellCountSorted, sim->d_cellCount,
+        sizeof(int) * totalCells, cudaMemcpyDeviceToDevice
+    ));
+
+    // Sort cell indices by descending count
+    // d_cellCountSorted = keys (counts), d_sortedCells = values (indices)
+    thrust::sort_by_key(
+        thrust::device,
+        sim->d_cellCountSorted,           // keys: counts
+        sim->d_cellCountSorted + totalCells,
+        sim->d_sortedCells,               // values: cell indices
+        thrust::greater<int>()            // descending
+    );
+
+    // END OF SORT CELL COUNTS
+
     // Copy prefix sum into a mutable "cursor" array (reuse d_particleIds as scratch)
     CHECK(cudaMemcpy(sim->d_cellCountPrefSumCopy, sim->d_cellCountPrefixSum,
             sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice));
@@ -621,4 +660,9 @@ void clearPointers(Simulation *sim) {
     CHECK(cudaFree(sim->d_particleIds));
     CHECK(cudaFree(sim->d_cellKeys));
     CHECK(cudaFree(sim->d_cellCountPrefSumCopy));
+
+    CHECK(cudaFree(sim->d_sortedCells));
+    CHECK(cudaFree(sim->d_cellCountSorted));
+
+    CHECK(cudaFree(sim->d_workQueueHead));
 }
