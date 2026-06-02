@@ -66,12 +66,6 @@ int main(int argc, char **argv) {
         move_particles(&sim);
         apply_boundary_conditions_free_stream(&sim);
         filter_and_index_particles(&sim);
-        // index_particles(&sim);
-
-        // if (step % 20 == 0) {
-        //     // printf("Reordering particles for better memory access...\n");
-        //     reorder_particles_by_cell(&sim);
-        // }
         
         collide_particles_hss(&sim);
         collide_particles(&sim);

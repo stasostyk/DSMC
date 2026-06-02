@@ -36,10 +36,8 @@ typedef struct {
     // for marking and filtering particles
     int *d_valid;
     int *d_particleIds;
-    int *d_particleIdsSorted;
     int *d_cellKeys;
-    int *d_cellKeysSorted;
-    int radixSortBits;
+    int *d_cellCountPrefSumCopy;
 
     // counters
     int sampleSteps;
