@@ -42,7 +42,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         curandState rngState = rngStates[rngIdx];
 
         int nPairs = NPC / 2;
-        // int offset = (NPC + 1) / 2;
+        int offset = (NPC + 1) / 2;
     
         for (int i = tid; i < NPC; i += blockSize) {
             // localParticleList[i] =
@@ -66,9 +66,8 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
             __syncthreads();
 
             for (int i = tid; i < nPairs; i += blockSize) {
-                int j = i + 1;
-                // if (j < NPC) 
-                {
+                int j = i + offset;
+                if (j < NPC) {
                     int i_global = localParticleList[i];
                     int j_global = localParticleList[j];
 
