@@ -480,7 +480,7 @@ __global__ void counting_sort_scatter_kernel(
     Particles P_in, Particles P_out,
     int *cellKeys,           // cell of each compacted particle
     int *cellOffsets,        // prefix sum of cellCount (write cursor per cell)
-    int *cellCount,
+    // int *cellCount,
     int NP
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -496,7 +496,7 @@ __global__ void counting_sort_scatter_kernel(
     P_out.vy[dest] = P_in.vy[i];
     P_out.vz[dest] = P_in.vz[i];
 
-    atomicAdd(&cellCount[cell], 1);
+    // atomicAdd(&cellCount[cell], 1);
 }
 
 void filter_and_index_particles(Simulation *sim) {
@@ -549,15 +549,15 @@ void filter_and_index_particles(Simulation *sim) {
         sim->d_new_P, sim->d_P,
         sim->d_cellKeys,
         sim->d_cellKeysSorted,   // cursor (gets incremented)
-        sim->d_cellCount,
+        // sim->d_cellCount,
         h_newNP
     );
     CHECK_KERNELCALL();
 
-    // rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
-    //     sim->d_cellKeys, sim->d_cellCount, h_newNP
-    // );
-    // CHECK_KERNELCALL();
+    rebuild_cell_count_kernel<<<blocksNew, threadsPerBlock>>>(
+        sim->d_cellKeys, sim->d_cellCount, h_newNP
+    );
+    CHECK_KERNELCALL();
 
 
 
