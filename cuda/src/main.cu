@@ -68,10 +68,10 @@ int main(int argc, char **argv) {
         filter_out_of_bounds(&sim);
         index_particles(&sim);
 
-        if (step % 20 == 0) {
-            // printf("Reordering particles for better memory access...\n");
-            reorder_particles_by_cell(&sim);
-        }
+        // if (step % 20 == 0) {
+        //     // printf("Reordering particles for better memory access...\n");
+        //     reorder_particles_by_cell(&sim);
+        // }
         
         collide_particles_hss(&sim);
         collide_particles(&sim);
