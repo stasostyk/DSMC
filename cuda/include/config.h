@@ -65,6 +65,7 @@ typedef struct {
     double sigmaRef;
     double CrRef;
     double ntcs_collisionProbMultiplier; // used in no time collision scheme
+    double ntcs_collisionProbMultiplierSquared; // used in no time collision scheme
     double ntcs_collidingPairsMultiplier; // used in no time collision scheme
     double ntcs_collisionProbExponent;    // used in no time collision scheme
 

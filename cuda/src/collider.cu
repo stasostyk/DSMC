@@ -12,14 +12,14 @@ __global__ void no_time_counter_scheme_kernel(
     unsigned long long *total_collisions, 
     Particles P, int *cellCount, int *cellCountPrefixSum, curandState *rngStates
 ) {
-    __shared__ int collisionsBlock[64];
+    __shared__ unsigned int collisionsBlock[64];
 
     // x direction varies fastest, and IDX_LIST and IDX_CELL are stored row major
     int m = blockIdx.x * blockDim.x + threadIdx.x;
     int l = blockIdx.y * blockDim.y + threadIdx.y;
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
-    int collisions = 0;
+    unsigned int collisions = 0;
 
     if (k < NX && l < NY && m < NZ) {
         int idx = IDX_CELL(k, l, m);
@@ -68,8 +68,9 @@ __global__ void no_time_counter_scheme_kernel(
                 // The real value to be calculated:
                 // double collisionProb = d_conf.ntcs_collisionProbMultiplier * pow(1.0 / relativeSpeed, d_conf.ntcs_collisionProbExponent) * relativeSpeed;
                 // But, we assume omega=0.75, which lets us remove pow() in a simple way:
-                float collisionProb = d_conf.ntcs_collisionProbMultiplier * sqrt(relativeSpeed);
-                if (curand_uniform(&rngState) < collisionProb) {
+                float collisionProbSquared = d_conf.ntcs_collisionProbMultiplierSquared * relativeSpeed;
+                float u = curand_uniform(&rngState);
+                if (u*u < collisionProbSquared) {
                     float N[3];
                     random_isotropic_vector_device(N, &rngState);
                     relativeSpeed *= 0.5f;

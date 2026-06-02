@@ -14,7 +14,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                                   int *cellCount,
                                   int *cellCountPrefixSum,
                                   curandState *rngStates) {
-    __shared__ int collisionsBlock[64];
+    __shared__ unsigned int collisionsBlock[64];
     __shared__ int localParticleList[MAX_PARTICLES_PER_CELL];
     __shared__ int NPC;
     __shared__ int N_x;
@@ -24,7 +24,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
     int tid = threadIdx.x;
 
-    collisionsBlock[tid] = 0;
+    unsigned int collisions = 0;
 
     if (blockIdx.x < NX && blockIdx.y < NY && blockIdx.z < NZ) {
         int cell_idx = IDX_CELL(blockIdx.x, blockIdx.y, blockIdx.z);
@@ -100,7 +100,7 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                         P.vy[j_global] = VC[1] - VCr[1];
                         P.vz[j_global] = VC[2] - VCr[2];
 
-                        collisionsBlock[tid] += 1;
+                        collisions += 1;
                     }
                 }
 
@@ -109,6 +109,8 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
         }
         rngStates[rngIdx] = rngState;
     }
+
+    collisionsBlock[tid] = collisions;
 
     __syncthreads();
 
