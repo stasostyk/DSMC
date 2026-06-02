@@ -24,16 +24,16 @@ __global__ void ntcs_persistent_kernel(
     // Each thread pulls work items until queue is empty
     while (true) {
         // Grab next cell from queue — one cell per thread
-        // unsigned int cellQueueIdx = atomicAdd(workQueueHead, 1);
+        unsigned int cellQueueIdx = atomicAdd(workQueueHead, 1);
 
-        // Replaced the single atomicAdd with warp-aggregated version:
-        unsigned int cellQueueIdx;
-        if ((threadIdx.x % 32) == 0) {
-            cellQueueIdx = atomicAdd(workQueueHead, 32);
-        }
-        // Broadcast from lane 0 to all lanes in warp
-        cellQueueIdx = __shfl_sync(0xFFFFFFFF, cellQueueIdx, 0);
-        cellQueueIdx += (threadIdx.x % 32);  // each lane gets its own index
+        // // Replaced the single atomicAdd with warp-aggregated version:
+        // unsigned int cellQueueIdx;
+        // if ((threadIdx.x % 32) == 0) {
+        //     cellQueueIdx = atomicAdd(workQueueHead, 32);
+        // }
+        // // Broadcast from lane 0 to all lanes in warp
+        // cellQueueIdx = __shfl_sync(0xFFFFFFFF, cellQueueIdx, 0);
+        // cellQueueIdx += (threadIdx.x % 32);  // each lane gets its own index
 
         if (cellQueueIdx >= totalCells) break;
 
@@ -97,9 +97,9 @@ __global__ void ntcs_persistent_kernel(
 
         }
 
-        cellQueueIdx += 31 - (threadIdx.x % 32);  // each lane gets its own index
+        // cellQueueIdx += 31 - (threadIdx.x % 32);  // each lane gets its own index
 
-        if (cellQueueIdx >= totalCells) break;
+        // if (cellQueueIdx >= totalCells) break;
     }
 
     rngStates[true_tid] = rngState;
@@ -124,7 +124,7 @@ void collide_particles(Simulation *sim) {
     int numSMs;
     cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
     int threadsPerBlock = 256;
-    int blocks = numSMs * 4;  // 4 waves per SM keeps the queue hot
+    int blocks = numSMs * 2;  // 4 waves per SM keeps the queue hot
 
     ntcs_persistent_kernel<<<blocks, threadsPerBlock>>>(
         sim->d_totalCollisions, sim->d_P,
