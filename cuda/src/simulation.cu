@@ -64,7 +64,7 @@ void setup(Simulation *sim, Config *conf) {
 
     CHECK(cudaMalloc(&sim->d_valid, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&sim->d_particleIds, sizeof(int) * MAX_PARTICLES));
-    CHECK(cudaMalloc(&sim->d_cellKeys, CELL_COUNT_SZ));
+    CHECK(cudaMalloc(&sim->d_cellKeys, sizeof(int) * MAX_PARTICLES));
 
     sim->temp_storage_bytes = 0;
     sim->d_temp_storage = nullptr;
