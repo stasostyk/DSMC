@@ -458,8 +458,6 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
     float y1 = y0 + d_conf.dt * P.vy[i];
     float z1 = z0 + d_conf.dt * P.vz[i];
 
-    curandState rngState = rngStates[i];
-
     // CHECK WINGS
     for (int wingId = 0; wingId < d_conf.wingCnt; wingId++) {
         float WingY = d_conf.wings[wingId].WingY;
@@ -475,6 +473,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
             float Zw=( z0*(WingY-y1)+z1*(y0-WingY))/(y0-y1);
             if ( Zw < 0.3 || Zw > 0.7 ) continue; // wing only occupies 0.3 < z < 0.7
             if ( Xw > WingX && Xw < WingX + WingLength ) {
+                curandState rngState = rngStates[i];
                 // Molecule interacts with the wing during the time step
                 // Linear interpolation of the time of scattering, Eq. (6.5.4)
                 float Dt1 = dt - dt * ( y0 - WingY ) / ( y0 - y1 );
@@ -485,6 +484,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
                     d_conf.KB,
                     &rngState
                 );
+                rngStates[i] = rngState;
                 // Move the reflected molecule
                 x1 = Xw + Dt1 * P.vx[i];
                 y1 = WingY + Dt1 * P.vy[i];
@@ -545,12 +545,14 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
                 float ny = (Yw - cy) / ballRadius;
                 float nz = (Zw - cz) / ballRadius;
 
+                curandState rngState = rngStates[i];
                 // Diffuse reflection aligned with normal
                 diffuse_scattering_device(&(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
                                 d_conf.moleculeMass, d_conf.balls[ballId].Tb,
                                 nx, ny, nz, d_conf.KB,
                                 &rngState
                             );
+                rngStates[i] = rngState;
 
                 // Move after collision
                 x1 = Xw + Dt1 * P.vx[i];
@@ -565,7 +567,6 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
     P.y[i] = y1;
     P.z[i] = z1;
 
-    rngStates[i] = rngState;
 }
 
 void move_particles(Simulation *sim) {
