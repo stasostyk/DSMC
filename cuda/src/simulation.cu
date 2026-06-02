@@ -165,6 +165,7 @@ void setup(Simulation *sim, Config *conf) {
 //     }
 // }
 
+
 // void reorder_particles_by_cell(Simulation *sim) {
 
 //     // Run exclusive prefix sum
