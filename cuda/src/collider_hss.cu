@@ -43,12 +43,14 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
 
         int nPairs = NPC / 2;
         int offset = (NPC + 1) / 2;
-        for (int i = tid; i < NPC; i += blockSize) {
-            // localParticleList[i] =
-            //         cellList[IDX_LIST(blockIdx.x, blockIdx.y, blockIdx.z, i)];
-            localParticleList[i] = particle_id_offset + i;
+    
+        if (threadIdx.x == 0) {
+            for (int i = tid; i < NPC; i += blockSize) {
+                // localParticleList[i] =
+                //         cellList[IDX_LIST(blockIdx.x, blockIdx.y, blockIdx.z, i)];
+                localParticleList[i] = particle_id_offset + i;
+            }
         }
-        __syncthreads();
 
         for (int b = 0; b < d_conf.hss_nbatch; b++) {
             // fisher-yates shuffle (could be optimized with parallel sorting of random keys)
