@@ -45,6 +45,7 @@ typedef struct {
 
 void setup(Simulation *sim, Config *conf);
 void reorder_particles_by_cell(Simulation *sim);
+void filter_out_of_bounds(Simulation *sim);
 void index_particles(Simulation *sim);
 void initialize_particles(Simulation *sim);
 void apply_boundary_conditions_free_stream(Simulation *sim);

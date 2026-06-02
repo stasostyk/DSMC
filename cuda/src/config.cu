@@ -110,6 +110,10 @@ void config_setup(Config *config, int object_case) {
     config->dz = config->Lz / NZ;
     config->cellVolume = config->dx * config->dy * config->dz;
 
+    config->inv_dx = NX / config->Lx;
+    config->inv_dy = NY / config->Ly;
+    config->inv_dz = NZ / config->Lz;
+
     config->NFree = config->PFree / ( config->KB * config->TFree );
     config->UFree = config->MaFree * sqrt ( ( 5.0 / 3.0 ) * config->KB * config->TFree / config->moleculeMass );
     config->UxFree = config->UFree * cos ( M_PI * config->angleOfAttack / 180.0 );
@@ -129,7 +133,7 @@ void config_setup(Config *config, int object_case) {
     config->ntcs_collisionProbMultiplier = pow(config->CrRef, config->ntcs_collisionProbExponent) * config->sigmaRef / majorant;
 
     config->hss_nbatch = 3;
-    config->hss_threshold = 400.0; // threshold for switching to HSS, in number of particles per cell
+    config->hss_threshold = 4000.0; // threshold for switching to HSS, in number of particles per cell
     config->hss_collisionProbMultiplier = (1.0/config->hss_nbatch) * config->weight * config->sigmaRef * config->dt / config->cellVolume;
 
     config->generation_derivatedMultiplier = sqrt(config->KB * config->TFree / config->moleculeMass);

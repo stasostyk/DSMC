@@ -54,7 +54,7 @@ typedef struct {
 
     // derived parameters
     double moleculeMass;
-    float dx, dy, dz;
+    float dx, dy, dz, inv_dx, inv_dy, inv_dz;
     float cellVolume;
     double weight;
     float NFree;

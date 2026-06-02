@@ -146,15 +146,12 @@ void reorder_particles_by_cell(Simulation *sim) {
 __global__ void bin_particles_kernel(
     Particles P, int *cellCount, int *cellList, int NP
 ) {
-    // TODO this seems like a bin pattern, could be improved
-    // note: the bottleneck is the atomicAdd
-
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    int k = (int)(P.x[i] / d_conf.dx);
-    int l = (int)(P.y[i] / d_conf.dy);
-    int m = (int)(P.z[i] / d_conf.dz);
+    int k = __float2int_rd(P.x[i] * d_conf.inv_dx);
+    int l = __float2int_rd(P.y[i] * d_conf.inv_dy);
+    int m = __float2int_rd(P.z[i] * d_conf.inv_dz);
 
     int n = atomicAdd(&cellCount[IDX_CELL(k, l, m)], 1);
     cellList[IDX_LIST(k, l, m, n)] = i;
@@ -163,7 +160,7 @@ __global__ void bin_particles_kernel(
 void index_particles(Simulation *sim) {
     cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
 
-    int thr = 64;
+    int thr = 128;
     dim3 threadsPerBlock2(thr, 1, 1);
     dim3 blocksPerGrid2((sim->NP + thr - 1) / thr, 1, 1);
     bin_particles_kernel<<<blocksPerGrid2, threadsPerBlock2>>>(
@@ -259,9 +256,10 @@ void generate_particles_in_rect(
     sim->NP += Nnew;
 }
 
-// TODO this kernel (and the function that calls it) 
-// is super similar to filter_particles_out_of_bounds,
-// maybe possible to use the same one for filtering.
+// Removes the particles that were created inside the balls.
+// This is called only once, at the initialization of the 
+// particles inside the whole volume, which happens before
+// the main simulation loop.
 __global__ void filter_particles_inside_ball(
     Particles P, Particles P_out, int NP, int *new_NP
 ) {
@@ -347,10 +345,6 @@ __global__ void filter_particles_out_of_bounds(
 }
 
 void apply_boundary_conditions_free_stream(Simulation *sim) {
-    // TODO potentially could be done all in parallel?
-    // TODO maybe the kernels to generate particles could be started even before
-    //      the previous task (move_particles) is finished because generation
-    //      could be done in a way so that it doesnt overlap? (note: use different streams)
     Config *conf = sim->conf;
     generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, 1);
     generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, 1);
@@ -358,7 +352,10 @@ void apply_boundary_conditions_free_stream(Simulation *sim) {
     generate_particles_in_rect(sim, 0.0, conf->Lx, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, 1);
     generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, 1);
     generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, 1);
+}
 
+// Filters particles out of bounds and 
+void filter_out_of_bounds(Simulation *sim) {
     int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
