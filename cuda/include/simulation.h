@@ -40,6 +40,7 @@ typedef struct {
     int *d_particleIdsSorted;
     int *d_cellKeys;
     int *d_cellKeysSorted;
+    int radixSortBits;
 
     // counters
     int sampleSteps;

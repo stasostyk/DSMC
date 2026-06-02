@@ -81,13 +81,19 @@ void setup(Simulation *sim, Config *conf) {
         NX*NY*NZ);
     cudaMalloc(&sim->d_temp_storage, sim->temp_storage_bytes);
 
+
+    int bits = 0;
+    int ncells = NX * NY * NZ;
+    while ((1<<bits) < ncells) bits++;
+    sim->radixSortBits = bits;
     // Also check space for radix sort
     size_t sort_temp_bytes = 0;
     cub::DeviceRadixSort::SortPairs(
         nullptr, sort_temp_bytes,
         sim->d_cellKeys, sim->d_cellKeysSorted,
         sim->d_particleIds, sim->d_particleIdsSorted,  // repurpose as value buffer
-        MAX_PARTICLES
+        MAX_PARTICLES,
+        0, sim->radixSortBits
     );
     // Reallocate if needed (lazy resize)
     if (sort_temp_bytes > sim->temp_storage_bytes) {
@@ -508,7 +514,8 @@ void filter_and_index_particles(Simulation *sim) {
         sim->d_cellKeysSorted,    // keys out
         sim->d_particleIds,       // values in  (0,1,2,...,h_newNP-1)
         sim->d_particleIdsSorted, // values out (permutation)
-        h_newNP
+        h_newNP,
+        0, sim->radixSortBits
     );
 
     cudaMemset(sim->d_cellCount, 0, CELL_COUNT_SZ);
