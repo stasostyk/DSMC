@@ -434,7 +434,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
             // Linear interpolation to point Y = WingY
             float Xw=( x0*(WingY-y1)+x1*(y0-WingY))/(y0-y1);
             float Zw=( z0*(WingY-y1)+z1*(y0-WingY))/(y0-y1);
-            if ( Zw < 0.3 || Zw > 0.7 ) return; // wing only occupies 0.3 < z < 0.7
+            if ( Zw < 0.3 || Zw > 0.7 ) continue; // wing only occupies 0.3 < z < 0.7
             if ( Xw > WingX && Xw < WingX + WingLength ) {
                 // Molecule interacts with the wing during the time step
                 // Linear interpolation of the time of scattering, Eq. (6.5.4)
