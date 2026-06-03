@@ -8,7 +8,7 @@
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 
-__global__ void ntcs_persistent_kernel(
+__global__ void ntcs_work_queue_kernel(
     unsigned long long *total_collisions,
     Particles P, int *cellCount, int *cellCountPrefixSum,
     curandState *rngStates, int *sortedCells, int totalCells,
@@ -113,7 +113,7 @@ void collide_particles(Simulation *sim) {
     int threadsPerBlock = 64;
     int blocks = numSMs;
 
-    ntcs_persistent_kernel<<<blocks, threadsPerBlock>>>(
+    ntcs_work_queue_kernel<<<blocks, threadsPerBlock>>>(
         sim->d_totalCollisions, sim->d_P,
         sim->d_cellCount, sim->d_cellCountPrefixSum,
         sim->rngStates, sim->d_sortedCells, NX*NY*NZ,
