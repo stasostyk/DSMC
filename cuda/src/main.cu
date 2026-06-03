@@ -16,8 +16,8 @@ void move_neccessary_data_before_printing(Simulation *sim) {
    
     CHECK(cudaMemcpy(&sim->totalCollisions, sim->d_totalCollisions, sizeof(unsigned long long), cudaMemcpyDeviceToHost))
 
-    CHECK(cudaMemcpy(sim->P.pos, sim->d_P.pos, sim->NP * sizeof(float) * 4, cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->P.vel, sim->d_P.vel, sim->NP * sizeof(float) * 4, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->P.pos, sim->d_P.pos, sim->NP * sizeof(float) * 3, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->P.vel, sim->d_P.vel, sim->NP * sizeof(float) * 3, cudaMemcpyDeviceToHost));
 
     CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
 } 

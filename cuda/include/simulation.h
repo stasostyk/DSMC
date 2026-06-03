@@ -9,7 +9,7 @@
 
 #define IDX_CELL(k, l, m) ((k)*NY*NZ + (l)*NZ + m)
 #define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + q)
-#define IDX_PARTICLE(i, j) (i * 4 + j)
+#define IDX_PARTICLE(i, j) (i * 3 + j)
 
 typedef struct {
     // for using randomness in GPU
