@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
 
     mpiHelper.slabWidth = conf.Lx / (float)world_size;
     mpiHelper.xMin = (float)world_rank * mpiHelper.slabWidth;
-    mpiHelper.xMax = mpiHelper.slabWidth + mpiHelper.slabWidth;
+    mpiHelper.xMax = mpiHelper.xMin + mpiHelper.slabWidth;
 
     mpiHelper.left_rank = (world_rank > 0) ? world_rank - 1 : MPI_PROC_NULL;
     mpiHelper.right_rank = (world_rank < world_size-1) ? world_rank + 1 : MPI_PROC_NULL;
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
     printf("slab width: %f\n", mpiHelper.slabWidth);
     printf("xmin: %f\n", mpiHelper.xMin);
     printf("xmax: %f\n", mpiHelper.xMax);
-    printf("kOffset: %f\n", mpiHelper.kOffset);
+    printf("kOffset: %d\n", mpiHelper.kOffset);
 
     setup(&sim, &conf);
 
