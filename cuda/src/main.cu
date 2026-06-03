@@ -110,6 +110,13 @@ int main(int argc, char **argv) {
     CHECK(cudaMalloc(&mpiHelper.d_prefix_right, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_prefix_left, sizeof(int) * MAX_PARTICLES));
 
+
+    // Use pinned memory for faster D2H/H2D transfers
+    cudaMallocHost(&mpiHelper.h_send_left,  MAX_PARTICLES * 6 * sizeof(float));
+    cudaMallocHost(&mpiHelper.h_send_right, MAX_PARTICLES * 6 * sizeof(float));
+    cudaMallocHost(&mpiHelper.h_recv_left,  MAX_PARTICLES * 6 * sizeof(float));
+    cudaMallocHost(&mpiHelper.h_recv_right, MAX_PARTICLES * 6 * sizeof(float));
+
     initialize_particles(&sim, &mpiHelper);
 
     timer_end(&t);

@@ -145,8 +145,14 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     );
     CHECK_KERNELCALL();
 
+       // --- Copy send buffers device -> host ---
+    CHECK(cudaMemcpy(mpiHelper->h_send_left,  mpiHelper->d_send_left,
+                     left_n  * 6 * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(mpiHelper->h_send_right, mpiHelper->d_send_right,
+                     right_n * 6 * sizeof(float), cudaMemcpyDeviceToHost));
 
-   // --- Step 5: Exchange counts via MPI (host ints, cheap) ---
+
+    // --- Exchange counts ---
     int recv_left_n = 0, recv_right_n = 0;
     MPI_Sendrecv(&left_n,       1, MPI_INT, mpiHelper->left_rank,  0,
                  &recv_right_n, 1, MPI_INT, mpiHelper->right_rank, 0,
@@ -155,16 +161,21 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
                  &recv_left_n,  1, MPI_INT, mpiHelper->left_rank,  1,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    // --- Step 6: Exchange particle data — device pointers directly ---
-    MPI_Sendrecv(mpiHelper->d_send_left,  left_n  * 6, MPI_FLOAT, mpiHelper->left_rank,  2,
-                 mpiHelper->d_recv_right, recv_right_n * 6, MPI_FLOAT, mpiHelper->right_rank, 2,
+    // --- Exchange particle data host <-> host ---
+    MPI_Sendrecv(mpiHelper->h_send_left,  left_n       * 6, MPI_FLOAT, mpiHelper->left_rank,  2,
+                 mpiHelper->h_recv_right, recv_right_n * 6, MPI_FLOAT, mpiHelper->right_rank, 2,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    MPI_Sendrecv(mpiHelper->d_send_right, right_n * 6, MPI_FLOAT, mpiHelper->right_rank, 3,
-                 mpiHelper->d_recv_left,  recv_left_n  * 6, MPI_FLOAT, mpiHelper->left_rank,  3,
+    MPI_Sendrecv(mpiHelper->h_send_right, right_n      * 6, MPI_FLOAT, mpiHelper->right_rank, 3,
+                 mpiHelper->h_recv_left,  recv_left_n  * 6, MPI_FLOAT, mpiHelper->left_rank,  3,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    // --- Step 7: Unpack received particles into d_new_P after the kept ones ---
-    // recv_left and recv_right are appended after the kept particles
+    // --- Copy recv buffers host -> device ---
+    CHECK(cudaMemcpy(mpiHelper->d_recv_left,  mpiHelper->h_recv_left,
+                     recv_left_n  * 6 * sizeof(float), cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(mpiHelper->d_recv_right, mpiHelper->h_recv_right,
+                     recv_right_n * 6 * sizeof(float), cudaMemcpyHostToDevice));
+
+    // --- Unpack ---
     int recv_left_offset  = keep_n;
     int recv_right_offset = keep_n + recv_left_n;
 
@@ -182,6 +193,7 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
         );
         CHECK_KERNELCALL();
     }
+
 
     swap_particles_with_new_another_func(sim);
     sim->NP = keep_n + recv_left_n + recv_right_n;

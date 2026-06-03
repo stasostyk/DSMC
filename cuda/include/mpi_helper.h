@@ -24,6 +24,11 @@ typedef struct {
     int *d_prefix_left, *d_prefix_right, *d_prefix_keep;
     int *d_count;
 
+    float *h_send_left;
+    float *h_send_right;
+    float *h_recv_left;
+    float *h_recv_right;
+
     float *d_send_left;
     float *d_send_right;
     float *d_recv_left;
