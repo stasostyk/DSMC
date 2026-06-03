@@ -28,7 +28,7 @@ set(SOURCES
 add_executable(DSMC ${SOURCES})
 target_link_libraries(DSMC PRIVATE 
     m
-    MPI::MPI_C
+    ${MPI_C_LIBRARIES}
 )
 
 target_include_directories(DSMC PRIVATE
@@ -37,6 +37,9 @@ target_include_directories(DSMC PRIVATE
 
 set_target_properties(DSMC PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
+
+    # Tell nvcc to use mpicc as the host compiler
+    CUDA_HOST_COMPILER ${MPI_C_COMPILER}
 )
 
 # Tell nvcc to pass MPI include paths through to the host compiler
