@@ -88,7 +88,8 @@ int main(int argc, char **argv) {
     mpiHelper.right_rank = (world_rank < world_size-1) ? world_rank + 1 : MPI_PROC_NULL;
     mpiHelper.comm = MPI_COMM_WORLD;
 
-    mpiHelper.kOffset = world_rank * NX / world_size;
+    // mpiHelper.kOffset = world_rank * NX / world_size;
+    mpiHelper.kOffset = 0;
 
     printf("slab width: %f\n", mpiHelper.slabWidth);
     printf("xmin: %f\n", mpiHelper.xMin);

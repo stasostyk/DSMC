@@ -41,16 +41,16 @@ void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpi
     // Reduce to rank 0 for output
     Cell *global_samples;
 
-    if (mpiHelper->worldRank == 1) {
+    if (mpiHelper->worldRank == 0) {
         global_samples = (Cell *)malloc(SAMPLES_SZ);
         MPI_Reduce(sim->samples, global_samples,
                    sizeof(Cell)/sizeof(float) * NX*NY*NZ,
-                   MPI_FLOAT, MPI_SUM, 1, MPI_COMM_WORLD);
+                   MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
     } else {
         MPI_Reduce(sim->samples, NULL,
                    sizeof(Cell)/sizeof(float) * NX*NY*NZ,
-                   MPI_FLOAT, MPI_SUM, 1, MPI_COMM_WORLD);
+                   MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
         return;
     }
