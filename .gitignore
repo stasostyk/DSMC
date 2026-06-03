@@ -1,6 +1,8 @@
 .vscode/**
 */build/**
 
+ball.png
+
 # Prerequisites
 *.d
 

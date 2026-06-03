@@ -193,7 +193,7 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
         );
         CHECK_KERNELCALL();
     }
-
+ 
     swap_particles_with_new_another_func(sim);
     sim->NP = keep_n + recv_left_n + recv_right_n;
 }
