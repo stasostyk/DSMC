@@ -47,6 +47,12 @@ int main(int argc, char **argv) {
     mpiHelper.worldSize = world_size;
     mpiHelper.numGpus = num_gpus;
 
+    if (NX % mpiHelper.worldSize != 0) {
+        printf("NX SHOULD DIVIDE BY MPI NODE COUNT!\n");
+        MPI_Finalize();
+        return 0;
+    }
+
     printf("world rank: %d\n", world_rank);
     printf("world size: %d\n", world_size);
     printf("num gpus: %d\n", num_gpus);
@@ -98,11 +104,13 @@ int main(int argc, char **argv) {
 
     setup(&sim, &conf);
 
+    int divFactor = 100; // empirically works (we want to save memory)
+    int smallerParticleSize = MAX_PARTICLES / divFactor;
     CHECK(cudaMalloc(&mpiHelper.d_count,  3 * sizeof(int)));
-    CHECK(cudaMalloc(&mpiHelper.d_recv_left, 6 * sizeof(float) * MAX_PARTICLES));
-    CHECK(cudaMalloc(&mpiHelper.d_recv_right, 6 * sizeof(float) * MAX_PARTICLES));
-    CHECK(cudaMalloc(&mpiHelper.d_send_left, 6 * sizeof(float) * MAX_PARTICLES));
-    CHECK(cudaMalloc(&mpiHelper.d_send_right, 6 * sizeof(float) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_recv_left, 6 * sizeof(float) * smallerParticleSize));
+    CHECK(cudaMalloc(&mpiHelper.d_recv_right, 6 * sizeof(float) * smallerParticleSize));
+    CHECK(cudaMalloc(&mpiHelper.d_send_left, 6 * sizeof(float) * smallerParticleSize));
+    CHECK(cudaMalloc(&mpiHelper.d_send_right, 6 * sizeof(float) * smallerParticleSize));
     CHECK(cudaMalloc(&mpiHelper.d_flag, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_is_left, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_is_keep, sizeof(int) * MAX_PARTICLES));
@@ -113,10 +121,10 @@ int main(int argc, char **argv) {
 
 
     // Use pinned memory for faster D2H/H2D transfers
-    cudaMallocHost(&mpiHelper.h_send_left,  MAX_PARTICLES * 6 * sizeof(float));
-    cudaMallocHost(&mpiHelper.h_send_right, MAX_PARTICLES * 6 * sizeof(float));
-    cudaMallocHost(&mpiHelper.h_recv_left,  MAX_PARTICLES * 6 * sizeof(float));
-    cudaMallocHost(&mpiHelper.h_recv_right, MAX_PARTICLES * 6 * sizeof(float));
+    cudaMallocHost(&mpiHelper.h_send_left,  smallerParticleSize * 6 * sizeof(float));
+    cudaMallocHost(&mpiHelper.h_send_right, smallerParticleSize * 6 * sizeof(float));
+    cudaMallocHost(&mpiHelper.h_recv_left,  smallerParticleSize * 6 * sizeof(float));
+    cudaMallocHost(&mpiHelper.h_recv_right, smallerParticleSize * 6 * sizeof(float));
 
     initialize_particles(&sim, &mpiHelper);
 
