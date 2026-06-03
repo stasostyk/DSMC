@@ -31,32 +31,21 @@ void setup(Simulation *sim, Config *conf) {
     CHECK(cudaMalloc(&(sim->d_new_NP), sizeof(int)));
 
     // initialize the SoA
-    sim->P.x = (float *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.y = (float *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.z = (float *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.vx = (float *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.vy = (float *)malloc(PARTICLES_FIELD_SZ);
-    sim->P.vz = (float *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.pos = (float *)malloc(PARTICLES_FIELD_SZ);
+    sim->P.vel = (float *)malloc(PARTICLES_FIELD_SZ);
+
 
     sim->samples = (Cell *)malloc(SAMPLES_SZ);
 
     CHECK(cudaMalloc(&sim->rngStates, MAX_PARTICLES * sizeof(curandState)));
     
     // device SoA for particles
-    CHECK(cudaMalloc(&sim->d_P.x,  PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_P.y,  PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_P.z,  PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_P.vx, PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_P.vy, PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_P.vz, PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_P.pos,  PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_P.vel,  PARTICLES_FIELD_SZ));
     
     // device SoA for new particles
-    CHECK(cudaMalloc(&sim->d_new_P.x,  PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_new_P.y,  PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_new_P.z,  PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_new_P.vx, PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_new_P.vy, PARTICLES_FIELD_SZ));
-    CHECK(cudaMalloc(&sim->d_new_P.vz, PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_new_P.pos,  PARTICLES_FIELD_SZ));
+    CHECK(cudaMalloc(&sim->d_new_P.vel,  PARTICLES_FIELD_SZ));
 
     CHECK(cudaMalloc(&sim->d_samples, SAMPLES_SZ));
     CHECK(cudaMalloc(&sim->d_cellCount, CELL_COUNT_SZ));
@@ -153,9 +142,9 @@ __global__ void generate_particles_in_rect_kernel(
     float vy = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + uy;
     float vz = curand_normal(&rngState) * d_conf.generation_derivatedMultiplier + uz;
 
-    P.vx[idx] = vx;
-    P.vy[idx] = vy;
-    P.vz[idx] = vz;
+    P.vel[IDX_PARTICLE(idx, 0)] = vx;
+    P.vel[IDX_PARTICLE(idx, 1)] = vy;
+    P.vel[IDX_PARTICLE(idx, 2)] = vz;
 
     if (moveFlag) {
         x += dt * vx;
@@ -163,9 +152,9 @@ __global__ void generate_particles_in_rect_kernel(
         z += dt * vz;
     }
     
-    P.x[idx] = x;
-    P.y[idx] = y;
-    P.z[idx] = z;
+    P.pos[IDX_PARTICLE(idx, 0)] = x;
+    P.pos[IDX_PARTICLE(idx, 1)] = y;
+    P.pos[IDX_PARTICLE(idx, 2)] = z;
 
     rngStates[idx] = rngState;
 }
@@ -213,10 +202,14 @@ __global__ void mark_valid_kernel(Particles P, int *valid, int NP) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
+    float x = P.pos[IDX_PARTICLE(i, 0)];
+    float y = P.pos[IDX_PARTICLE(i, 1)];
+    float z = P.pos[IDX_PARTICLE(i, 2)];
+
     valid[i] =
-        (P.x[i] >= 0.0f && P.x[i] < d_conf.Lx &&
-         P.y[i] >= 0.0f && P.y[i] < d_conf.Ly &&
-         P.z[i] >= 0.0f && P.z[i] < d_conf.Lz);
+        (x >= 0.0f && x < d_conf.Lx &&
+         y >= 0.0f && y < d_conf.Ly &&
+         z >= 0.0f && z < d_conf.Lz);
 }
 
 // Removes the particles that were created inside the balls.
@@ -237,21 +230,21 @@ __global__ void filter_particles_inside_ball(
         float cz = d_conf.balls[ballId].ballCenterZ;
         float R2 = d_conf.balls[ballId].ballRadiusSquared;
 
-        float rx = P.x[i] - cx;
-        float ry = P.y[i] - cy;
-        float rz = P.z[i] - cz;
+        float rx = P.pos[IDX_PARTICLE(i, 0)] - cx;
+        float ry = P.pos[IDX_PARTICLE(i, 1)] - cy;
+        float rz = P.pos[IDX_PARTICLE(i, 2)] - cz;
 
         insideBall |= (rx*rx + ry*ry + rz*rz <= R2);
     }
 
     if (!insideBall) {
         int pos = atomicAdd(new_NP, 1);
-        P_out.x[pos] = P.x[i];
-        P_out.y[pos] = P.y[i];
-        P_out.z[pos] = P.z[i];
-        P_out.vx[pos] = P.vx[i];
-        P_out.vy[pos] = P.vy[i];
-        P_out.vz[pos] = P.vz[i];
+        P_out.pos[IDX_PARTICLE(pos, 0)] = P.pos[IDX_PARTICLE(i, 0)];
+        P_out.pos[IDX_PARTICLE(pos, 1)] = P.pos[IDX_PARTICLE(i, 1)];
+        P_out.pos[IDX_PARTICLE(pos, 2)] = P.pos[IDX_PARTICLE(i, 2)];
+        P_out.vel[IDX_PARTICLE(pos, 0)] = P.vel[IDX_PARTICLE(i, 0)];
+        P_out.vel[IDX_PARTICLE(pos, 1)] = P.vel[IDX_PARTICLE(i, 1)];
+        P_out.vel[IDX_PARTICLE(pos, 2)] = P.vel[IDX_PARTICLE(i, 2)];
     }
 }
 
@@ -303,17 +296,17 @@ __global__ void scatter_and_key_kernel(
 
     int j = particleIds[i];
 
-    float x = P.x[i];
-    float y = P.y[i];
-    float z = P.z[i];
+    float x = P.pos[IDX_PARTICLE(i, 0)];
+    float y = P.pos[IDX_PARTICLE(i, 1)];
+    float z = P.pos[IDX_PARTICLE(i, 2)];
 
     // write compact particle
-    P_out.x[j]  = x;
-    P_out.y[j]  = y;
-    P_out.z[j]  = z;
-    P_out.vx[j] = P.vx[i];
-    P_out.vy[j] = P.vy[i];
-    P_out.vz[j] = P.vz[i];
+    P_out.pos[IDX_PARTICLE(j, 0)]  = x;
+    P_out.pos[IDX_PARTICLE(j, 1)]  = y;
+    P_out.pos[IDX_PARTICLE(j, 2)]  = z;
+    P_out.vel[IDX_PARTICLE(j, 0)] = P.vel[IDX_PARTICLE(i, 0)];
+    P_out.vel[IDX_PARTICLE(j, 1)] = P.vel[IDX_PARTICLE(i, 1)];
+    P_out.vel[IDX_PARTICLE(j, 2)] = P.vel[IDX_PARTICLE(i, 2)];
 
     // compute cell key
     int k = __float2int_rd(x * d_conf.inv_dx);
@@ -337,12 +330,12 @@ __global__ void counting_sort_scatter_kernel(
     int cell = cellKeys[i];
     int dest = atomicAdd(&cellOffsets[cell], 1);  // claim a slot
 
-    P_out.x[dest]  = P_in.x[i];
-    P_out.y[dest]  = P_in.y[i];
-    P_out.z[dest]  = P_in.z[i];
-    P_out.vx[dest] = P_in.vx[i];
-    P_out.vy[dest] = P_in.vy[i];
-    P_out.vz[dest] = P_in.vz[i];
+    P_out.pos[IDX_PARTICLE(dest, 0)]  = P_in.pos[IDX_PARTICLE(i, 0)];
+    P_out.pos[IDX_PARTICLE(dest, 1)]  = P_in.pos[IDX_PARTICLE(i, 1)];
+    P_out.pos[IDX_PARTICLE(dest, 2)]  = P_in.pos[IDX_PARTICLE(i, 2)];
+    P_out.vel[IDX_PARTICLE(dest, 0)] = P_in.vel[IDX_PARTICLE(i, 0)];
+    P_out.vel[IDX_PARTICLE(dest, 1)] = P_in.vel[IDX_PARTICLE(i, 1)];
+    P_out.vel[IDX_PARTICLE(dest, 2)] = P_in.vel[IDX_PARTICLE(i, 2)];
 }
 
 void filter_and_index_particles(Simulation *sim) {
@@ -409,15 +402,15 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
     if (i >= NP) return;
 
     // initial positions
-    float x0 = P.x[i];
-    float y0 = P.y[i];
-    float z0 = P.z[i];
+    float x0 = P.pos[IDX_PARTICLE(i, 0)];
+    float y0 = P.pos[IDX_PARTICLE(i, 1)];
+    float z0 = P.pos[IDX_PARTICLE(i, 2)];
 
     // final positions
     // move this timestamp
-    float x1 = x0 + d_conf.dt * P.vx[i];
-    float y1 = y0 + d_conf.dt * P.vy[i];
-    float z1 = z0 + d_conf.dt * P.vz[i];
+    float x1 = x0 + d_conf.dt * P.vel[IDX_PARTICLE(i, 0)];
+    float y1 = y0 + d_conf.dt * P.vel[IDX_PARTICLE(i, 1)];
+    float z1 = z0 + d_conf.dt * P.vel[IDX_PARTICLE(i, 2)];
 
     curandState rngState = rngStates[i];
 
@@ -441,14 +434,14 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
                 float Dt1 = dt - dt * ( y0 - WingY ) / ( y0 - y1 );
                 // Generate velocity vector of the reflected molecule
                 diffuse_scattering_y_device(
-                    &(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
+                    &(P.vel[IDX_PARTICLE(i, 0)]), &(P.vel[IDX_PARTICLE(i, 1)]), &(P.vel[IDX_PARTICLE(i, 2)]),
                     moleculeMass,Tw,(y0-WingY>0)?1.0:(-1.0),
                     d_conf.KB,
                     &rngState
                 );
                 // Move the reflected molecule
-                x1 = Xw + Dt1 * P.vx[i];
-                y1 = WingY + Dt1 * P.vy[i];
+                x1 = Xw + Dt1 * P.vel[IDX_PARTICLE(i, 0)];
+                y1 = WingY + Dt1 * P.vel[IDX_PARTICLE(i, 1)];
             }
         }
     }
@@ -507,24 +500,24 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
                 float nz = (Zw - cz) / ballRadius;
 
                 // Diffuse reflection aligned with normal
-                diffuse_scattering_device(&(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
+                diffuse_scattering_device(&(P.vel[IDX_PARTICLE(i, 0)]), &(P.vel[IDX_PARTICLE(i, 1)]), &(P.vel[IDX_PARTICLE(i, 2)]),
                                 d_conf.moleculeMass, d_conf.balls[ballId].Tb,
                                 nx, ny, nz, d_conf.KB,
                                 &rngState
                             );
 
                 // Move after collision
-                x1 = Xw + Dt1 * P.vx[i];
-                y1 = Yw + Dt1 * P.vy[i];
-                z1 = Zw + Dt1 * P.vz[i];
+                x1 = Xw + Dt1 * P.vel[IDX_PARTICLE(i, 0)];
+                y1 = Yw + Dt1 * P.vel[IDX_PARTICLE(i, 1)];
+                z1 = Zw + Dt1 * P.vel[IDX_PARTICLE(i, 2)];
             }
         }
     }
 
     // save final positions
-    P.x[i] = x1;
-    P.y[i] = y1;
-    P.z[i] = z1;
+    P.pos[IDX_PARTICLE(i, 0)] = x1;
+    P.pos[IDX_PARTICLE(i, 1)] = y1;
+    P.pos[IDX_PARTICLE(i, 2)] = z1;
 
     rngStates[i] = rngState;
 }
@@ -556,9 +549,9 @@ __global__ void accumulate_sampling_kernel(
     for (int q = 0; q < Nc; q++) {
         int i = offset + q;
 
-        float vx = P.vx[i];
-        float vy = P.vy[i];
-        float vz = P.vz[i];
+        float vx = P.vel[IDX_PARTICLE(i, 0)];
+        float vy = P.vel[IDX_PARTICLE(i, 1)];
+        float vz = P.vel[IDX_PARTICLE(i, 2)];
 
         samples[IDX_CELL(k, l, m)].countVx += vx;
         samples[IDX_CELL(k, l, m)].countVy += vy;
@@ -586,28 +579,16 @@ void accumulate_sampling(Simulation *sim) {
 
 void clearPointers(Simulation *sim) {
     free(sim->conf);
-    free(sim->P.x);
-    free(sim->P.y);
-    free(sim->P.z);
-    free(sim->P.vx);
-    free(sim->P.vy);
-    free(sim->P.vz);
+    free(sim->P.pos);
+    free(sim->P.vel);
     free(sim->samples);
 
     CHECK(cudaFree(sim->rngStates));
 
-    CHECK(cudaFree(sim->d_P.x));
-    CHECK(cudaFree(sim->d_P.y));
-    CHECK(cudaFree(sim->d_P.z));
-    CHECK(cudaFree(sim->d_P.vx));
-    CHECK(cudaFree(sim->d_P.vy));
-    CHECK(cudaFree(sim->d_P.vz));
-    CHECK(cudaFree(sim->d_new_P.x));
-    CHECK(cudaFree(sim->d_new_P.y));
-    CHECK(cudaFree(sim->d_new_P.z));
-    CHECK(cudaFree(sim->d_new_P.vx));
-    CHECK(cudaFree(sim->d_new_P.vy));
-    CHECK(cudaFree(sim->d_new_P.vz));
+    CHECK(cudaFree(sim->d_P.pos));
+    CHECK(cudaFree(sim->d_P.vel));
+    CHECK(cudaFree(sim->d_new_P.pos));
+    CHECK(cudaFree(sim->d_new_P.vel));
 
     CHECK(cudaFree(sim->d_samples));
     CHECK(cudaFree(sim->d_cellCount));
