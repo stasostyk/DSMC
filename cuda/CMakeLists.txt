@@ -1,9 +1,10 @@
-cmake_minimum_required(VERSION 3.20)  # for CUDA+MPI support
-cmake_policy(SET CMP0104 NEW)
+cmake_minimum_required(VERSION 3.18)  # for CUDA+MPI support
 project(DSMC C CUDA)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CUDA_STANDARD 11)
+
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -MD")  # otherwise galileo gives error
 
 # Set GPU architectures
 if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
