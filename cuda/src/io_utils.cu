@@ -39,22 +39,29 @@ void print_global_diagnostics(Simulation *sim, int step) {
 void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpiHelper) {
     // Each rank has samples for its local cells
     // Reduce to rank 0 for output
-    Cell *global_samples;
+    int world_size = mpiHelper->worldSize;
+    int world_rank = mpiHelper->worldRank;
 
-    if (mpiHelper->worldRank == 0) {
-        global_samples = (Cell *)malloc(SAMPLES_SZ);
-        MPI_Reduce(sim->samples, global_samples,
-                   sizeof(Cell)/sizeof(float) * NX*NY*NZ,
-                   MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+    // Each rank owns NX_local cells in x, full NY and NZ
+    int NX_local = NX / world_size;  // cells this rank owns
+    int local_cells = NX_local * NY * NZ;
+    int local_sz = local_cells * sizeof(Cell);
 
-    } else {
-        MPI_Reduce(sim->samples, NULL,
-                   sizeof(Cell)/sizeof(float) * NX*NY*NZ,
-                   MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
-
-        return;
+    Cell *global_samples = NULL;
+    if (world_rank == 0) {
+        global_samples = (Cell *)malloc(SAMPLES_SZ);  // full NX*NY*NZ
     }
-    
+
+    // Each rank sends its local_cells cells, rank 0 receives all slabs
+    MPI_Gather(
+        sim->samples,   local_cells * sizeof(Cell), MPI_BYTE,
+        global_samples, local_cells * sizeof(Cell), MPI_BYTE,
+        0, MPI_COMM_WORLD
+    );
+
+    if (world_rank != 0) return;
+
+
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open output file\n");
