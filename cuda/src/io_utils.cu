@@ -3,6 +3,8 @@
 #include <math.h>
 #include "../include/io_utils.h"
 #include "../include/simulation.h"
+#include <mpi.h>
+#include "../include/mpi_helper.h"
 
 void print_global_diagnostics(Simulation *sim, int step) {
     double sumVx = 0.0, sumVy = 0.0, sumVz = 0.0;
@@ -34,7 +36,25 @@ void print_global_diagnostics(Simulation *sim, int step) {
     printf("  totalCollisions = %lld\n", sim->totalCollisions);
 }
 
-void write_averaged_macros(Simulation *sim, const char *filename) {
+void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpiHelper) {
+    // Each rank has samples for its local cells
+    // Reduce to rank 0 for output
+    Cell *global_samples;
+
+    if (mpiHelper->worldRank == 0) {
+        global_samples = (Cell *)malloc(SAMPLES_SZ);
+        MPI_Reduce(sim->samples, global_samples,
+                   sizeof(Cell)/sizeof(float) * NX*NY*NZ,
+                   MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    } else {
+        MPI_Reduce(sim->samples, NULL,
+                   sizeof(Cell)/sizeof(float) * NX*NY*NZ,
+                   MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+        return;
+    }
+    
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open output file\n");
@@ -50,7 +70,7 @@ void write_averaged_macros(Simulation *sim, const char *filename) {
                 double yc = (l + 0.5) * sim->conf->dy;
                 double zc = (m + 0.5) * sim->conf->dz;
 
-                double avgNP = sim->samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
+                double avgNP = global_samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
 
                 if (avgNP <= 0.0) {
                     fprintf(fp, "%e %e %e %e %e %e %e %e %e\n",
@@ -58,13 +78,13 @@ void write_averaged_macros(Simulation *sim, const char *filename) {
                     continue;
                 }
 
-                double count = sim->samples[IDX_CELL(k, l, m)].countNP;
+                double count = global_samples[IDX_CELL(k, l, m)].countNP;
 
-                double ux = sim->samples[IDX_CELL(k, l, m)].countVx / count;
-                double uy = sim->samples[IDX_CELL(k, l, m)].countVy / count;
-                double uz = sim->samples[IDX_CELL(k, l, m)].countVz / count;
+                double ux = global_samples[IDX_CELL(k, l, m)].countVx / count;
+                double uy = global_samples[IDX_CELL(k, l, m)].countVy / count;
+                double uz = global_samples[IDX_CELL(k, l, m)].countVz / count;
 
-                double meanV2 = sim->samples[IDX_CELL(k, l, m)].countV2 / count;
+                double meanV2 = global_samples[IDX_CELL(k, l, m)].countV2 / count;
                 double meanU2 = ux * ux + uy * uy + uz * uz;
 
                 double n = sim->conf->weight * avgNP / sim->conf->cellVolume;
@@ -79,6 +99,9 @@ void write_averaged_macros(Simulation *sim, const char *filename) {
     }
 
     fclose(fp);
+
+
+    free(global_samples);
 }
 
 void write_vti(Simulation *sim, const char *filename) {

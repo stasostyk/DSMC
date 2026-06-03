@@ -8,7 +8,9 @@
 #include "../include/config.h"
 #include "../include/math_utils.h"
 #include "../include/cuda_utils.h"
+#include "../include/mpi_helper.h"
 #include <cub/cub.cuh>
+#include "../include/mpi_helper.h"
 
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -284,27 +286,47 @@ void remove_particles_inside_balls(Simulation *sim) {
     swap_particles_with_new(sim);
 }
 
-void initialize_particles(Simulation *sim) {
+void initialize_particles(Simulation *sim, MPIHelper *mpiHelper) {
     sim->NP = 0;
-    generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
+    // generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
+    
+    // only fill particles in the MPI node's domain [xmin, xmax]
+    generate_particles_in_rect(sim, mpiHelper->xMin, mpiHelper->xMax, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
 
     remove_particles_inside_balls(sim);
 }
 
-void apply_boundary_conditions_free_stream(Simulation *sim) {
+void apply_boundary_conditions_free_stream(Simulation *sim, MPIHelper *mpiHelper) {
     Config *conf = sim->conf;
-    generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, 1);
-    generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, 1);
-    generate_particles_in_rect(sim, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, 1);
-    generate_particles_in_rect(sim, 0.0, conf->Lx, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, 1);
-    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, 1);
-    generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, 1);
+    // generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, 1);
+    // generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, 1);
+    // generate_particles_in_rect(sim, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, 1);
+    // generate_particles_in_rect(sim, 0.0, conf->Lx, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, 1);
+    // generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, 1);
+    // generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, 1);
+
+    float xMin = mpiHelper->xMin;
+    float xMax = mpiHelper->xMax;
+
+    // X faces: injects at physical boundaries
+    if (mpiHelper->worldRank == 0)
+        generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, 1);
+    
+    if (mpiHelper->worldRank == mpiHelper->worldSize-1)
+        generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, 1);
+    
+    // Y and Z faces: all ranks inject
+    generate_particles_in_rect(sim, xMin, xMax, -(conf->DL), 0.0, 0.0, conf->Lz, 1);
+    generate_particles_in_rect(sim, xMin, xMax, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, 1);
+    generate_particles_in_rect(sim, xMin, xMax, 0.0, conf->Ly, -(conf->DL), 0.0, 1);
+    generate_particles_in_rect(sim, xMin, xMax, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, 1);
+
 }
 
 __global__ void scatter_and_key_kernel(
     Particles P, Particles P_out, int *valid, int *particleIds, 
     int *cellKeys, int *cellCount,
-    int NP
+    int NP, int kOffset
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
@@ -330,7 +352,7 @@ __global__ void scatter_and_key_kernel(
     int l = __float2int_rd(y * d_conf.inv_dy);
     int m = __float2int_rd(z * d_conf.inv_dz);
 
-    int cell = IDX_CELL(k,l,m);
+    int cell = IDX_CELL(k - kOffset,l,m);
     cellKeys[j] = cell;
     atomicAdd(&cellCount[cell], 1);
 }
@@ -355,7 +377,7 @@ __global__ void counting_sort_scatter_kernel(
     P_out.vz[dest] = P_in.vz[i];
 }
 
-void filter_and_index_particles(Simulation *sim) {
+void filter_and_index_particles(Simulation *sim, MPIHelper *mpiHelper) {
     int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
@@ -386,7 +408,8 @@ void filter_and_index_particles(Simulation *sim) {
         sim->d_valid, sim->d_particleIds,
         sim->d_cellKeys, 
         sim->d_cellCount,
-        sim->NP
+        sim->NP,
+        mpiHelper->kOffset
     );
     CHECK_KERNELCALL();
 
@@ -587,7 +610,8 @@ void move_particles(Simulation *sim) {
 }
 
 __global__ void accumulate_sampling_kernel(
-    int *cellCount, int *cellCountPrefixSum, Cell *samples, Particles P
+    int *cellCount, int *cellCountPrefixSum, Cell *samples, Particles P,
+    int kOffset
 ) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     int l = blockIdx.y * blockDim.y + threadIdx.y;
@@ -595,7 +619,7 @@ __global__ void accumulate_sampling_kernel(
 
     if (k >= NX || l >= NY || m >= NZ) return;
     
-    int cellIdx = IDX_CELL(k, l, m);
+    int cellIdx = IDX_CELL(k-kOffset, l, m);
     int offset = cellCountPrefixSum[cellIdx];
 
     int Nc = cellCount[cellIdx];
@@ -608,15 +632,15 @@ __global__ void accumulate_sampling_kernel(
         float vy = P.vy[i];
         float vz = P.vz[i];
 
-        samples[IDX_CELL(k, l, m)].countVx += vx;
-        samples[IDX_CELL(k, l, m)].countVy += vy;
-        samples[IDX_CELL(k, l, m)].countVz += vz;
-        samples[IDX_CELL(k, l, m)].countV2 += vx * vx + vy * vy + vz * vz;
+        samples[IDX_CELL(k-kOffset, l, m)].countVx += vx;
+        samples[IDX_CELL(k-kOffset, l, m)].countVy += vy;
+        samples[IDX_CELL(k-kOffset, l, m)].countVz += vz;
+        samples[IDX_CELL(k-kOffset, l, m)].countV2 += vx * vx + vy * vy + vz * vz;
     }
 }
 
 
-void accumulate_sampling(Simulation *sim) {
+void accumulate_sampling(Simulation *sim, MPIHelper *mpiHelper) {
     sim->sampleSteps++;
 
     dim3 threadsPerBlock(4, 4, 4);
@@ -627,7 +651,8 @@ void accumulate_sampling(Simulation *sim) {
     );
 
     accumulate_sampling_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_cellCount, sim->d_cellCountPrefixSum, sim->d_samples, sim->d_P
+        sim->d_cellCount, sim->d_cellCountPrefixSum, sim->d_samples, sim->d_P,
+        mpiHelper->kOffset
     );
     CHECK_KERNELCALL();
 }

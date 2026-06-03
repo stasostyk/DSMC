@@ -9,6 +9,8 @@
 #include "../include/io_utils.h"
 #include "../include/timer.h"
 #include "../include/cuda_utils.h"
+#include "../include/mpi_helper.h"
+#include "../include/mpi_exchange.h"
 
 #include <mpi.h>
 
@@ -40,6 +42,11 @@ int main(int argc, char **argv) {
     cudaGetDeviceCount(&num_gpus);
     CHECK(cudaSetDevice(world_rank % num_gpus));
 
+    MPIHelper mpiHelper;
+    mpiHelper.worldRank = world_rank;
+    mpiHelper.worldSize = world_size;
+    mpiHelper.numGpus = num_gpus;
+
     printf("world rank: %d\n", world_rank);
     printf("world size: %d\n", world_size);
     printf("num gpus: %d\n", num_gpus);
@@ -63,9 +70,6 @@ int main(int argc, char **argv) {
     }
     printf("Running case: %s\n", argv[1]);
 
-    MPI_Finalize();
-    return 0;
-
     Timer t, allProgramTimer;
 
     timer_start(&allProgramTimer);
@@ -75,8 +79,38 @@ int main(int argc, char **argv) {
     Config conf;
 
     config_setup(&conf, object_case);
+
+    mpiHelper.slabWidth = conf.Lx / (float)world_size;
+    mpiHelper.xMin = (float)world_rank * mpiHelper.slabWidth;
+    mpiHelper.xMax = mpiHelper.slabWidth + mpiHelper.slabWidth;
+
+    mpiHelper.left_rank = (world_rank > 0) ? world_rank - 1 : MPI_PROC_NULL;
+    mpiHelper.right_rank = (world_rank < world_size-1) ? world_rank + 1 : MPI_PROC_NULL;
+    mpiHelper.comm = MPI_COMM_WORLD;
+
+    mpiHelper.kOffset = world_rank * NX / world_size;
+
+    printf("slab width: %f\n", mpiHelper.slabWidth);
+    printf("xmin: %f\n", mpiHelper.xMin);
+    printf("xmax: %f\n", mpiHelper.xMax);
+    printf("kOffset: %f\n", mpiHelper.kOffset);
+
     setup(&sim, &conf);
-    initialize_particles(&sim);
+
+    CHECK(cudaMalloc(&mpiHelper.d_count,  3 * sizeof(int)));
+    CHECK(cudaMalloc(&mpiHelper.d_recv_left, 6 * sizeof(float) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_recv_right, 6 * sizeof(float) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_send_left, 6 * sizeof(float) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_send_right, 6 * sizeof(float) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_flag, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_is_left, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_is_keep, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_is_right, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_prefix_keep, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_prefix_right, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper.d_prefix_left, sizeof(int) * MAX_PARTICLES));
+
+    initialize_particles(&sim, &mpiHelper);
 
     timer_end(&t);
     timer_print(&t, "INITIALIZATION");
@@ -84,14 +118,17 @@ int main(int argc, char **argv) {
 
     for (int step = 0; step < conf.nSteps; step++) {
         move_particles(&sim);
-        apply_boundary_conditions_free_stream(&sim);
-        filter_and_index_particles(&sim);
+        apply_boundary_conditions_free_stream(&sim, &mpiHelper);
+
+        exchange_boundary_particles(&sim, &mpiHelper);
+
+        filter_and_index_particles(&sim, &mpiHelper);
         
-        collide_particles_hss(&sim);
+        // collide_particles_hss(&sim);
         collide_particles(&sim);
 
         if (step >= conf.firstSampleStep && step % conf.samplingPeriod == 0) {
-            accumulate_sampling(&sim);
+            accumulate_sampling(&sim, &mpiHelper);
         }
 
         if (conf.printPeriod > 0 && step % conf.printPeriod == 0) {
@@ -106,13 +143,26 @@ int main(int argc, char **argv) {
     move_neccessary_data_before_printing(&sim);
 
     print_global_diagnostics(&sim, conf.nSteps);
-    write_averaged_macros(&sim, "fields_avg.dat");
+    write_averaged_macros(&sim, "fields_avg.dat", &mpiHelper);
     write_paraview_files(&sim, conf.nSteps);
 
     clearPointers(&sim);
 
     timer_end(&allProgramTimer);
     timer_print(&allProgramTimer, "ALL PROGRAM FINISHED");
+
+    CHECK(cudaFree(mpiHelper.d_flag));
+    CHECK(cudaFree(mpiHelper.d_is_keep));
+    CHECK(cudaFree(mpiHelper.d_is_left));
+    CHECK(cudaFree(mpiHelper.d_is_right));
+    CHECK(cudaFree(mpiHelper.d_prefix_keep));
+    CHECK(cudaFree(mpiHelper.d_prefix_left));
+    CHECK(cudaFree(mpiHelper.d_prefix_right));
+    CHECK(cudaFree(mpiHelper.d_count));
+    CHECK(cudaFree(mpiHelper.d_send_left));
+    CHECK(cudaFree(mpiHelper.d_send_right));
+
+    MPI_Finalize();
 
     return 0;
 }

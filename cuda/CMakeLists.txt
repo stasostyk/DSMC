@@ -20,6 +20,7 @@ set(SOURCES
     src/simulation.cu
     src/io_utils.cu
     src/timer.cu
+    src/mpi_exchange.cu
 )
 
 # Executable
