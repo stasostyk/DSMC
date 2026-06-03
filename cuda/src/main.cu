@@ -10,6 +10,8 @@
 #include "../include/timer.h"
 #include "../include/cuda_utils.h"
 
+#include <mpi.h>
+
 void move_neccessary_data_before_printing(Simulation *sim) {
     // Particle data is mostly stored in and dealt in GPU, 
     // to have the newest version in CPU, it needs to be copied.
@@ -27,6 +29,21 @@ void move_neccessary_data_before_printing(Simulation *sim) {
 } 
 
 int main(int argc, char **argv) {
+    MPI_Init(&argc, &argv);
+    
+    int world_rank, world_size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    // Assign one GPU per MPI rank
+    int num_gpus;
+    cudaGetDeviceCount(&num_gpus);
+    CHECK(cudaSetDevice(world_rank % num_gpus));
+
+    printf("world rank: %d\n", world_rank);
+    printf("world size: %d\n", world_size);
+    printf("num gpus: %d\n", num_gpus);
+
     if (argc < 2) {
         printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".\n");
         return 0;
@@ -45,6 +62,9 @@ int main(int argc, char **argv) {
         return 0;
     }
     printf("Running case: %s\n", argv[1]);
+
+    MPI_Finalize();
+    return 0;
 
     Timer t, allProgramTimer;
 
