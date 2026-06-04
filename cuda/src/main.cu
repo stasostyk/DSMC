@@ -112,11 +112,13 @@ int main(int argc, char **argv) {
 
     setup(&sim, &conf);
 
-    int divFactor = 1; // empirically works (we want to save memory)
-    int smallerParticleSize = MAX_PARTICLES / divFactor;
+    // Assume (because of the stream), most particles going right
+    int particlesGoingRight = MAX_PARTICLES / 10;
+    int particlesGoingLeft = MAX_PARTICLES / 100;
+
     CHECK(cudaMalloc(&mpiHelper.d_count,  3 * sizeof(int)));
-    CHECK(cudaMalloc(&mpiHelper.d_send_left, 6 * sizeof(float) * smallerParticleSize));
-    CHECK(cudaMalloc(&mpiHelper.d_send_right, 6 * sizeof(float) * smallerParticleSize));
+    CHECK(cudaMalloc(&mpiHelper.d_send_left, 6 * sizeof(float) * particlesGoingLeft));
+    CHECK(cudaMalloc(&mpiHelper.d_send_right, 6 * sizeof(float) * particlesGoingRight));
     // CHECK(cudaMalloc(&mpiHelper.d_recv_left, 6 * sizeof(float) * smallerParticleSize));
     // CHECK(cudaMalloc(&mpiHelper.d_recv_right, 6 * sizeof(float) * smallerParticleSize));
     CHECK(cudaMalloc(&mpiHelper.d_flag, sizeof(int) * MAX_PARTICLES));
@@ -125,14 +127,14 @@ int main(int argc, char **argv) {
     CHECK(cudaMalloc(&mpiHelper.d_prefix_left, sizeof(int) * MAX_PARTICLES));
 
     // Use pinned memory for faster D2H/H2D transfers
-    CHECK(cudaMallocHost(&mpiHelper.h_send_left,  smallerParticleSize * 6 * sizeof(float)));
-    CHECK(cudaMallocHost(&mpiHelper.h_send_right, smallerParticleSize * 6 * sizeof(float)));
-    CHECK(cudaMallocHost(&mpiHelper.h_recv_left,  smallerParticleSize * 6 * sizeof(float)));
-    CHECK(cudaMallocHost(&mpiHelper.h_recv_right, smallerParticleSize * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper.h_send_left,  particlesGoingLeft * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper.h_send_right, particlesGoingRight * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper.h_recv_left,  particlesGoingRight * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper.h_recv_right, particlesGoingLeft * 6 * sizeof(float)));
 
     // Recv side: access is sequential in unpack_recv_kernel, so zero-copy is fine
-    cudaHostAlloc(&mpiHelper.h_recv_left,  smallerParticleSize * 6 * sizeof(float), cudaHostAllocMapped);
-    cudaHostAlloc(&mpiHelper.h_recv_right, smallerParticleSize * 6 * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc(&mpiHelper.h_recv_left,  particlesGoingRight * 6 * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc(&mpiHelper.h_recv_right, particlesGoingLeft * 6 * sizeof(float), cudaHostAllocMapped);
     cudaHostGetDevicePointer(&mpiHelper.d_recv_left_mapped,  mpiHelper.h_recv_left,  0);
     cudaHostGetDevicePointer(&mpiHelper.d_recv_right_mapped, mpiHelper.h_recv_right, 0);
 
