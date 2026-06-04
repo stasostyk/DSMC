@@ -134,7 +134,7 @@ void config_setup(Config *config, int object_case) {
     config->ntcs_collisionProbMultiplierSquared = config->ntcs_collisionProbMultiplier * config->ntcs_collisionProbMultiplier;
 
     config->hss_nbatch = 3;
-    config->hss_threshold = 4000.0; // threshold for switching to HSS, in number of particles per cell
+    config->hss_threshold = 1.0; // threshold for switching to HSS, in number of particles per cell
     config->hss_collisionProbMultiplier = (1.0/config->hss_nbatch) * config->weight * config->sigmaRef * config->dt / config->cellVolume;
 
     config->generation_derivatedMultiplier = sqrt(config->KB * config->TFree / config->moleculeMass);
