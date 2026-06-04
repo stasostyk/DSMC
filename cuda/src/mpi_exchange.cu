@@ -138,13 +138,18 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     );
     CHECK_KERNELCALL();
 
-       // --- Copy send buffers device -> host ---
-    CHECK(cudaMemcpy(mpiHelper->h_send_left,  mpiHelper->d_send_left,
-                     left_n  * 6 * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(mpiHelper->h_send_right, mpiHelper->d_send_right,
-                     right_n * 6 * sizeof(float), cudaMemcpyDeviceToHost));
+    // Copy send buffers device -> host
+    // this is done assynchronously with the MPI sending below
+    CHECK(cudaMemcpyAsync(mpiHelper->h_send_left,  mpiHelper->d_send_left,
+                     left_n  * 6 * sizeof(float), cudaMemcpyDeviceToHost,
+                    mpiHelper->exchangeCopyStream
+    ));
+    CHECK(cudaMemcpyAsync(mpiHelper->h_send_right, mpiHelper->d_send_right,
+                     right_n * 6 * sizeof(float), cudaMemcpyDeviceToHost,
+                    mpiHelper->exchangeCopyStream
+    ));
 
-    // --- Exchange counts ---
+    // Exchange counts
     int recv_left_n = 0, recv_right_n = 0;
     MPI_Sendrecv(&left_n,       1, MPI_INT, mpiHelper->left_rank,  0,
                  &recv_right_n, 1, MPI_INT, mpiHelper->right_rank, 0,
@@ -153,7 +158,9 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
                  &recv_left_n,  1, MPI_INT, mpiHelper->left_rank,  1,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    // --- Exchange particle data host <-> host ---
+    cudaStreamSynchronize(mpiHelper->exchangeCopyStream);
+
+    // Exchange particle data between different hosts
     MPI_Sendrecv(mpiHelper->h_send_left,  left_n       * 6, MPI_FLOAT, mpiHelper->left_rank,  2,
                  mpiHelper->h_recv_right, recv_right_n * 6, MPI_FLOAT, mpiHelper->right_rank, 2,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -165,14 +172,14 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     int recv_right_offset = sim->NP + recv_left_n;
 
     if (recv_left_n > 0) {
-        unpack_recv_kernel<<<(recv_left_n + threads-1)/threads, block>>>(
+        unpack_recv_kernel<<<(recv_left_n + threads-1)/threads, block, 0, mpiHelper->stream1>>>(
             sim->d_P, recv_left_offset,
             mpiHelper->d_recv_left_mapped, recv_left_n
         );
         CHECK_KERNELCALL();
     }
     if (recv_right_n > 0) {
-        unpack_recv_kernel<<<(recv_right_n + threads-1)/threads, block>>>(
+        unpack_recv_kernel<<<(recv_right_n + threads-1)/threads, block, 0, mpiHelper->stream2>>>(
             sim->d_P, recv_right_offset,
             mpiHelper->d_recv_right_mapped, recv_right_n
         );
@@ -182,11 +189,15 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     int recv_total = recv_left_n + recv_right_n;
     if (recv_total > 0) {
         int threads = 128;
-        set_valid_kernel<<<(recv_total + threads-1)/threads, threads>>>(
+        set_valid_kernel<<<(recv_total + threads-1)/threads, threads, 0, mpiHelper->stream3>>>(
             sim->d_valid, sim->NP, recv_total
         );
         CHECK_KERNELCALL();
     }
+
+    cudaStreamSynchronize(mpiHelper->stream1);
+    cudaStreamSynchronize(mpiHelper->stream2);
+    cudaStreamSynchronize(mpiHelper->stream3);
 
     // swap_particles_with_new_another_func(sim);
     sim->NP = sim->NP + recv_left_n + recv_right_n;
@@ -250,10 +261,15 @@ void setupMPIHelper(MPIHelper *mpiHelper, Config *conf) {
     CHECK(cudaMallocHost(&mpiHelper->h_recv_right, particlesGoingLeft * 6 * sizeof(float)));
 
     // Recv side: access is sequential in unpack_recv_kernel, so zero-copy is fine
-    cudaHostAlloc(&mpiHelper->h_recv_left,  particlesGoingRight * 6 * sizeof(float), cudaHostAllocMapped);
-    cudaHostAlloc(&mpiHelper->h_recv_right, particlesGoingLeft * 6 * sizeof(float), cudaHostAllocMapped);
-    cudaHostGetDevicePointer(&mpiHelper->d_recv_left_mapped,  mpiHelper->h_recv_left,  0);
-    cudaHostGetDevicePointer(&mpiHelper->d_recv_right_mapped, mpiHelper->h_recv_right, 0);
+    CHECK(cudaHostAlloc(&mpiHelper->h_recv_left,  particlesGoingRight * 6 * sizeof(float), cudaHostAllocMapped));
+    CHECK(cudaHostAlloc(&mpiHelper->h_recv_right, particlesGoingLeft * 6 * sizeof(float), cudaHostAllocMapped));
+    CHECK(cudaHostGetDevicePointer(&mpiHelper->d_recv_left_mapped,  mpiHelper->h_recv_left,  0));
+    CHECK(cudaHostGetDevicePointer(&mpiHelper->d_recv_right_mapped, mpiHelper->h_recv_right, 0));
+
+    CHECK(cudaStreamCreate(&mpiHelper->exchangeCopyStream));
+    CHECK(cudaStreamCreate(&mpiHelper->stream1));
+    CHECK(cudaStreamCreate(&mpiHelper->stream2));
+    CHECK(cudaStreamCreate(&mpiHelper->stream3));
 }
 
 Cell *reduceSamples(Simulation *sim, MPIHelper *mpiHelper) {
@@ -286,4 +302,9 @@ void freeMPIHelper(MPIHelper *mpiHelper) {
     CHECK(cudaFreeHost(mpiHelper->h_recv_right));
     CHECK(cudaFreeHost(mpiHelper->h_send_left));
     CHECK(cudaFreeHost(mpiHelper->h_send_right));
+
+    CHECK(cudaStreamDestroy(mpiHelper->exchangeCopyStream));
+    CHECK(cudaStreamDestroy(mpiHelper->stream1));
+    CHECK(cudaStreamDestroy(mpiHelper->stream2));
+    CHECK(cudaStreamDestroy(mpiHelper->stream3));
 }
