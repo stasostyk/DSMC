@@ -7,6 +7,13 @@
 #include <cub/cub.cuh>
 #include "../include/cuda_utils.h"
 
+#include <thrust/iterator/transform_iterator.h>
+
+struct FlagEquals {
+    int target;
+    __device__ int operator()(int f) const { return f == target; }
+};
+
 __global__ void classify_particles_kernel(
     Particles P, int NP,
     float x_lo, float x_hi,
@@ -28,21 +35,6 @@ __global__ void classify_particles_kernel(
 
     d_flag[i] = flag;
     atomicAdd(&d_count[flag], 1);
-}
-
-__global__ void split_flags_kernel(
-    int *d_flag, int NP,
-    int *d_is_keep,
-    int *d_is_left,
-    int *d_is_right
-) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= NP) return;
-
-    int f = d_flag[i];
-    d_is_keep[i]  = (f == 0);
-    d_is_left[i]  = (f == 1);
-    d_is_right[i] = (f == 2);
 }
 
 __global__ void scatter_send_kernel(
@@ -107,23 +99,16 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     );
     CHECK_KERNELCALL();
 
-    split_flags_kernel<<<grid, block>>>(
-        mpiHelper->d_flag, sim->NP,
-        mpiHelper->d_is_keep,
-        mpiHelper->d_is_left,
-        mpiHelper->d_is_right
-    );
-    CHECK_KERNELCALL();
+    auto is_left  = thrust::make_transform_iterator(mpiHelper->d_flag, FlagEquals{1});
+    auto is_right = thrust::make_transform_iterator(mpiHelper->d_flag, FlagEquals{2});
+    auto is_keep  = thrust::make_transform_iterator(mpiHelper->d_flag, FlagEquals{0});
 
-
-
-    // fill boolean arrays from d_flag in a small kernel, then:
-    cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes, 
-        mpiHelper->d_is_left,  mpiHelper->d_prefix_left,  sim->NP);
-    cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes, 
-        mpiHelper->d_is_right, mpiHelper->d_prefix_right, sim->NP);
-    cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes, 
-        mpiHelper->d_is_keep,  mpiHelper->d_prefix_keep,  sim->NP);
+    cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
+        is_left,  mpiHelper->d_prefix_left,  sim->NP);
+    cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
+        is_right, mpiHelper->d_prefix_right, sim->NP);
+    cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
+        is_keep,  mpiHelper->d_prefix_keep,  sim->NP);
 
 
     int h_count[3];
