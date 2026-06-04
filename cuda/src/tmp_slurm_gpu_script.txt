@@ -18,9 +18,6 @@ module load cmake
 export NCCL_DEBUG=INFO
 
 
-srun --ntasks=1 ompi_info --parsable | grep cuda
-srun echo "HERE"
-
 cd "$SLURM_SUBMIT_DIR/cuda"
 rm -rf build
 mkdir -p build
@@ -29,8 +26,12 @@ cd build
 cmake ..
 
 make -j$(nproc)
+nvidia-smi --query-gpu=index,memory.used,memory.total \
+           --format=csv -l 1 > logs/gpu_mem.log &
+MONITOR_PID=$!
 
-srun --ntasks=1 nvidia-smi
+#srun --ntasks=1 nvidia-smi
+#  srun nsys profile --trace=cuda --stats=true --output="$HOME/nsys-out" ./DSMC BALL
 srun ./DSMC BALL
 
-
+kill $MONITOR_PID

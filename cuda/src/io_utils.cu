@@ -42,22 +42,17 @@ void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpi
     int world_size = mpiHelper->worldSize;
     int world_rank = mpiHelper->worldRank;
 
-    // Each rank owns NX_local cells in x, full NY and NZ
-    // int NX_local = NX / world_size;  // cells this rank owns
-    // int local_cells = NX_local * NY * NZ;
-    // int local_sz = local_cells * sizeof(Cell);
-
     Cell *global_samples = NULL;
     if (world_rank == 0) {
-        global_samples = (Cell *)malloc(SAMPLES_SZ * world_size);  // full NX*NY*NZ
+        Cell *global_samples = (Cell *)malloc(SAMPLES_SZ);
     }
 
-    // Each rank sends its local_cells cells, rank 0 receives all slabs
-    MPI_Gather(
-        sim->samples,   SAMPLES_SZ, MPI_BYTE,
-        global_samples, SAMPLES_SZ, MPI_BYTE,
-        0, MPI_COMM_WORLD
-    );
+    // Each rank has samples for its local cells
+    // Reduce to rank 0 for output
+    Cell *global_samples = (Cell *)malloc(SAMPLES_SZ);
+    MPI_Reduce(sim->samples, global_samples,
+                sizeof(Cell)/sizeof(float) * NX*NY*NZ,
+                MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if (world_rank != 0) return;
 

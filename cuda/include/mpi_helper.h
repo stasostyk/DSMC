@@ -16,7 +16,7 @@ typedef struct {
     float slabWidth;
     float xMin;
     float xMax;
-    int kOffset;
+    // int kOffset;
 
     // Three boolean arrays for CUB scans
     int *d_flag;
