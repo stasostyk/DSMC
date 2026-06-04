@@ -10,7 +10,6 @@
 #include "../include/cuda_utils.h"
 #include "../include/mpi_helper.h"
 #include <cub/cub.cuh>
-#include "../include/mpi_helper.h"
 
 #include <thrust/sequence.h>
 #include <thrust/sort.h>

@@ -5,6 +5,7 @@
 #include "../include/simulation.h"
 #include "../include/config.h"
 #include <cub/cub.cuh>
+#include <mpi.h>
 #include "../include/cuda_utils.h"
 
 #include <thrust/iterator/transform_iterator.h>
