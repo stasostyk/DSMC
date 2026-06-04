@@ -41,9 +41,9 @@ __global__ void scatter_send_kernel(
     Particles P, int NP,
     int *d_flag, int *d_prefix_left, int *d_prefix_right,  // prefix sum of (flag==1) and (flag==2)
     float *send_left,            // packed: x,y,z,vx,vy,vz interleaved
-    float *send_right,
-    int *d_keep_prefix,          // prefix sum of (flag==0)
-    Particles P_keep             // compacted in-place output
+    float *send_right
+    //, int *d_keep_prefix          // prefix sum of (flag==0)
+    //, Particles P_keep             // compacted in-place output
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
@@ -60,18 +60,19 @@ __global__ void scatter_send_kernel(
         send_right[j+0] = P.x[i];  send_right[j+1] = P.y[i];
         send_right[j+2] = P.z[i];  send_right[j+3] = P.vx[i];
         send_right[j+4] = P.vy[i]; send_right[j+5] = P.vz[i];
-    } else {
-        int j = d_keep_prefix[i];
-        P_keep.x[j]  = P.x[i]; P_keep.y[j]  = P.y[i]; P_keep.z[j]  = P.z[i];
-        P_keep.vx[j] = P.vx[i]; P_keep.vy[j] = P.vy[i]; P_keep.vz[j] = P.vz[i];
-    }
+    } 
+    // else {
+    //     int j = d_keep_prefix[i];
+    //     P_keep.x[j]  = P.x[i]; P_keep.y[j]  = P.y[i]; P_keep.z[j]  = P.z[i];
+    //     P_keep.vx[j] = P.vx[i]; P_keep.vy[j] = P.vy[i]; P_keep.vz[j] = P.vz[i];
+    // }
 }
 
-void swap_particles_with_new_another_func(Simulation *sim) {
-    Particles temp = sim->d_P;
-    sim->d_P = sim->d_new_P;
-    sim->d_new_P = temp;
-}
+// void swap_particles_with_new_another_func(Simulation *sim) {
+//     Particles temp = sim->d_P;
+//     sim->d_P = sim->d_new_P;
+//     sim->d_new_P = temp;
+// }
 
 __global__ void unpack_recv_kernel(
     Particles P, int offset,
@@ -84,6 +85,12 @@ __global__ void unpack_recv_kernel(
     P.x[j]  = recv_buf[i*6+0]; P.y[j]  = recv_buf[i*6+1];
     P.z[j]  = recv_buf[i*6+2]; P.vx[j] = recv_buf[i*6+3];
     P.vy[j] = recv_buf[i*6+4]; P.vz[j] = recv_buf[i*6+5];
+}
+
+__global__ void set_valid_kernel(int *d_valid, int offset, int count) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= count) return;
+    d_valid[offset + i] = 0;
 }
 
 void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
@@ -101,14 +108,14 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
 
     auto is_left  = thrust::make_transform_iterator(sim->d_valid, FlagEquals{1});
     auto is_right = thrust::make_transform_iterator(sim->d_valid, FlagEquals{2});
-    auto is_keep  = thrust::make_transform_iterator(sim->d_valid, FlagEquals{0});
+    // auto is_keep  = thrust::make_transform_iterator(sim->d_valid, FlagEquals{0});
 
     cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
         is_left,  mpiHelper->d_prefix_left,  sim->NP);
     cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
         is_right, mpiHelper->d_prefix_right, sim->NP);
-    cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
-        is_keep,  mpiHelper->d_prefix_keep,  sim->NP);
+    // cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
+    //     is_keep,  mpiHelper->d_prefix_keep,  sim->NP);
 
 
     int h_count[3];
@@ -131,9 +138,9 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
         mpiHelper->d_prefix_left,   // used for send_left indexing
         mpiHelper->d_prefix_right,  // used for send_right indexing  
         mpiHelper->d_send_left,
-        mpiHelper->d_send_right,
-        mpiHelper->d_prefix_keep,
-        sim->d_new_P                // compacted survivors go here
+        mpiHelper->d_send_right
+        // ,mpiHelper->d_prefix_keep
+        // ,sim->d_new_P                // compacted survivors go here
     );
     CHECK_KERNELCALL();
 
@@ -168,24 +175,39 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     //                  recv_right_n * 6 * sizeof(float), cudaMemcpyHostToDevice));
 
     // --- Unpack ---
-    int recv_left_offset  = keep_n;
-    int recv_right_offset = keep_n + recv_left_n;
+    // int recv_left_offset  = keep_n;
+    // int recv_right_offset = keep_n + recv_left_n;
+
+    int recv_left_offset  = sim->NP;
+    int recv_right_offset = sim->NP + recv_left_n;
 
     if (recv_left_n > 0) {
         unpack_recv_kernel<<<(recv_left_n + threads-1)/threads, block>>>(
-            sim->d_new_P, recv_left_offset,
+            sim->d_P, recv_left_offset,
             mpiHelper->d_recv_left_mapped, recv_left_n
         );
         CHECK_KERNELCALL();
     }
     if (recv_right_n > 0) {
         unpack_recv_kernel<<<(recv_right_n + threads-1)/threads, block>>>(
-            sim->d_new_P, recv_right_offset,
+            sim->d_P, recv_right_offset,
             mpiHelper->d_recv_right_mapped, recv_right_n
         );
         CHECK_KERNELCALL();
     }
  
-    swap_particles_with_new_another_func(sim);
-    sim->NP = keep_n + recv_left_n + recv_right_n;
+    // CHECK(cudaMemset(sim->d_valid + sim->NP, 0, recv_left_n + recv_right_n));
+
+    int recv_total = recv_left_n + recv_right_n;
+    if (recv_total > 0) {
+        int threads = 128;
+        set_valid_kernel<<<(recv_total + threads-1)/threads, threads>>>(
+            sim->d_valid, sim->NP, recv_total
+        );
+        CHECK_KERNELCALL();
+    }
+
+    // swap_particles_with_new_another_func(sim);
+    // sim->NP = keep_n + recv_left_n + recv_right_n;
+    sim->NP = sim->NP + recv_left_n + recv_right_n;
 }

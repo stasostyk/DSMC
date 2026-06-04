@@ -20,7 +20,7 @@ typedef struct {
 
     // Three boolean arrays for CUB scans
     // int *d_flag; // now done with d_valid from Simulation sim variable
-    int *d_prefix_left, *d_prefix_right, *d_prefix_keep;
+    int *d_prefix_left, *d_prefix_right;
     int *d_count;
 
     float *h_send_left;

@@ -225,7 +225,8 @@ __global__ void mark_valid_kernel(Particles P, int *valid, int NP) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    valid[i] =
+    // the MPI exchange should have left valid[i] = 0 for the ones that are left
+    valid[i] = (valid[i] == 0) &&
         (P.x[i] >= 0.0f && P.x[i] < d_conf.Lx &&
          P.y[i] >= 0.0f && P.y[i] < d_conf.Ly &&
          P.z[i] >= 0.0f && P.z[i] < d_conf.Lz);
