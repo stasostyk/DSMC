@@ -20,22 +20,35 @@ __global__ void classify_particles_kernel(
     int *d_flag,   // 0=keep, 1=send_left, 2=send_right
     int *d_count   // [0]=keep, [1]=send_left, [2]=send_right (atomics)
 ) {
+    __shared__ int s_count[2];
+
+
+    if (threadIdx.x < 2) s_count[threadIdx.x] = 0;
+    __syncthreads();
+
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= NP) return;
 
-    float x = P.x[i];
-    int flag;
+    if (i < NP) {
+        float x = P.x[i];
+        int flag;
 
-    if (x < x_lo) 
-        flag = 1;
-    else if (x >= x_hi) 
-        flag = 2;
-    else 
-        flag = 0;
+        if (x < x_lo) 
+            flag = 1;
+        else if (x >= x_hi) 
+            flag = 2;
+        else 
+            flag = 0;
 
-    d_flag[i] = flag;
-    if (flag > 0)
-        atomicAdd(&d_count[flag-1], 1);
+        d_flag[i] = flag;
+
+        if (flag > 0)
+            atomicAdd(&s_count[flag-1], 1);
+    }
+
+    __syncthreads();
+
+    if (threadIdx.x < 2 && s_count[threadIdx.x] > 0)
+        atomicAdd(&d_count[threadIdx.x], s_count[threadIdx.x]);
 }
 
 __global__ void scatter_send_kernel(
