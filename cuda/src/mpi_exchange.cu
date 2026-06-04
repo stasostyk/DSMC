@@ -237,7 +237,6 @@ void setupMPIHelper(MPIHelper *mpiHelper, Config *conf) {
     CHECK(cudaGetDeviceCount(&num_gpus));
     CHECK(cudaSetDevice(world_rank % num_gpus));
 
-    MPIHelper mpiHelper;
     mpiHelper->worldRank = world_rank;
     mpiHelper->worldSize = world_size;
     mpiHelper->numGpus = num_gpus;
@@ -291,3 +290,8 @@ void setupMPIHelper(MPIHelper *mpiHelper, Config *conf) {
     cudaHostGetDevicePointer(&mpiHelper->d_recv_left_mapped,  mpiHelper->h_recv_left,  0);
     cudaHostGetDevicePointer(&mpiHelper->d_recv_right_mapped, mpiHelper->h_recv_right, 0);
 }
+
+Cell *reduceSamples(Simulation *sim, MPIHelper *mpiHelper) {
+    return NULL;
+}
+

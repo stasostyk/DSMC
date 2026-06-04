@@ -103,8 +103,6 @@ int main(int argc, char **argv) {
 
     move_neccessary_data_before_printing(&sim);
 
-
-
     // Each rank has samples for its local cells
     // Reduce to rank 0 for output
     // int world_size = mpiHelper->worldSize;
@@ -133,15 +131,11 @@ int main(int argc, char **argv) {
     timer_end(&allProgramTimer);
     timer_print(&allProgramTimer, "ALL PROGRAM FINISHED");
 
-    // CHECK(cudaFree(mpiHelper.d_flag));
-    // CHECK(cudaFree(mpiHelper.d_prefix_keep));
     CHECK(cudaFree(mpiHelper.d_prefix_left));
     CHECK(cudaFree(mpiHelper.d_prefix_right));
     CHECK(cudaFree(mpiHelper.d_count));
     CHECK(cudaFree(mpiHelper.d_send_left));
     CHECK(cudaFree(mpiHelper.d_send_right));
-    // CHECK(cudaFree(mpiHelper.d_recv_left));
-    // CHECK(cudaFree(mpiHelper.d_recv_right));
     CHECK(cudaFreeHost(mpiHelper.h_recv_left));
     CHECK(cudaFreeHost(mpiHelper.h_recv_right));
     CHECK(cudaFreeHost(mpiHelper.h_send_left));
