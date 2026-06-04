@@ -95,13 +95,13 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
 
     classify_particles_kernel<<<grid, block>>>(
         sim->d_P, sim->NP, mpiHelper->xMin, mpiHelper->xMax,
-        mpiHelper->d_flag, mpiHelper->d_count
+        sim->d_valid, mpiHelper->d_count
     );
     CHECK_KERNELCALL();
 
-    auto is_left  = thrust::make_transform_iterator(mpiHelper->d_flag, FlagEquals{1});
-    auto is_right = thrust::make_transform_iterator(mpiHelper->d_flag, FlagEquals{2});
-    auto is_keep  = thrust::make_transform_iterator(mpiHelper->d_flag, FlagEquals{0});
+    auto is_left  = thrust::make_transform_iterator(sim->d_valid, FlagEquals{1});
+    auto is_right = thrust::make_transform_iterator(sim->d_valid, FlagEquals{2});
+    auto is_keep  = thrust::make_transform_iterator(sim->d_valid, FlagEquals{0});
 
     cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
         is_left,  mpiHelper->d_prefix_left,  sim->NP);
@@ -127,7 +127,7 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
 
     scatter_send_kernel<<<grid, block>>>(
         sim->d_P, sim->NP,
-        mpiHelper->d_flag,
+        sim->d_valid,
         mpiHelper->d_prefix_left,   // used for send_left indexing
         mpiHelper->d_prefix_right,  // used for send_right indexing  
         mpiHelper->d_send_left,
