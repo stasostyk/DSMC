@@ -11,7 +11,7 @@ typedef struct {
     int left_rank;
     int right_rank;   // MPI neighbors (-1 if none)
     MPI_Comm comm;
-
+ 
     // MPI Node will only take care of the grid slice with x = [xMin, xMax]
     float slabWidth;
     float xMin;
