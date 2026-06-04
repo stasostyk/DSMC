@@ -97,6 +97,7 @@
 //     return 0;
 // }
 
+#include <stdio.h>
 int main() {
     printf("TESTSTS\n\n\n\nTESTSTS\n\n\n");
     return 0;
