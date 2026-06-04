@@ -34,7 +34,8 @@ __global__ void classify_particles_kernel(
         flag = 0;
 
     d_flag[i] = flag;
-    atomicAdd(&d_count[flag], 1);
+    if (flag > 0)
+        atomicAdd(&d_count[flag-1], 1);
 }
 
 __global__ void scatter_send_kernel(
@@ -120,9 +121,9 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
 
     int h_count[3];
     CHECK(cudaMemcpy(h_count, mpiHelper->d_count, 3 * sizeof(int), cudaMemcpyDeviceToHost));
-    int keep_n  = h_count[0];
-    int left_n  = h_count[1];
-    int right_n = h_count[2];
+    // int keep_n  = h_count[0];
+    int left_n  = h_count[0];
+    int right_n = h_count[1];
 
     if (left_n > mpiHelper->bufferToSendLeftCount || right_n > mpiHelper->bufferToSendRightCount) {
         fprintf(stderr, "Rank %d: exchange buffer overflow! left=%d right=%d bufLeft=%d\n bufRight=%d\n",
