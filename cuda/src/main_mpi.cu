@@ -154,13 +154,13 @@ int main(int argc, char **argv) {
 
         exchange_boundary_particles(&sim, &mpiHelper);
 
-        filter_and_index_particles(&sim, &mpiHelper);
+        filter_and_index_particles(&sim);
         
         // collide_particles_hss(&sim);
         collide_particles(&sim);
 
         if (step >= conf.firstSampleStep && step % conf.samplingPeriod == 0) {
-            accumulate_sampling(&sim, &mpiHelper);
+            accumulate_sampling(&sim);
         }
 
         if (conf.printPeriod > 0 && step % conf.printPeriod == 0) {
