@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
 
         filter_and_index_particles(&sim, true);
         
-        // collide_particles_hss(&sim);
+        collide_particles_hss(&sim);
         collide_particles(&sim);
 
         if (step >= conf.firstSampleStep && step % conf.samplingPeriod == 0) {
