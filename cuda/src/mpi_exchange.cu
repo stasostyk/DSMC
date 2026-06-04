@@ -99,7 +99,7 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     dim3 block(threads);
     dim3 grid((sim->NP + threads - 1) / threads);
 
-    CHECK(cudaMemset(mpiHelper->d_count, 0, 3 * sizeof(int)));
+    CHECK(cudaMemset(mpiHelper->d_count, 0, 2 * sizeof(int)));
 
     classify_particles_kernel<<<grid, block>>>(
         sim->d_P, sim->NP, mpiHelper->xMin, mpiHelper->xMax,
