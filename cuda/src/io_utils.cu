@@ -44,7 +44,7 @@ void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpi
 
     Cell *global_samples = NULL;
     if (world_rank == 0) {
-        Cell *global_samples = (Cell *)malloc(SAMPLES_SZ);
+        global_samples = (Cell *)malloc(SAMPLES_SZ);
     }
 
     // Each rank has samples for its local cells
