@@ -3,7 +3,6 @@
 #include <math.h>
 #include "../include/io_utils.h"
 #include "../include/simulation.h"
-#include <mpi.h>
 #include "../include/mpi_helper.h"
 
 void print_global_diagnostics(Simulation *sim, int step) {
@@ -36,27 +35,7 @@ void print_global_diagnostics(Simulation *sim, int step) {
     printf("  totalCollisions = %lld\n", sim->totalCollisions);
 }
 
-void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpiHelper) {
-    // Each rank has samples for its local cells
-    // Reduce to rank 0 for output
-    // int world_size = mpiHelper->worldSize;
-    int world_rank = mpiHelper->worldRank;
-
-    Cell *global_samples = NULL;
-    if (world_rank == 0) {
-        global_samples = (Cell *)malloc(SAMPLES_SZ);
-        memset(global_samples, 0, SAMPLES_SZ);
-    }
-
-    // Each rank has samples for its local cells
-    // Reduce to rank 0 for output
-    MPI_Reduce(sim->samples, global_samples,
-                sizeof(Cell)/sizeof(float) * NX*NY*NZ,
-                MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
-
-    if (world_rank != 0) return;
-
-
+void write_averaged_macros(Simulation *sim, const char *filename, Cell *global_samples) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open output file\n");
@@ -101,9 +80,6 @@ void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpi
     }
 
     fclose(fp);
-
-
-    free(global_samples);
 }
 
 void write_vti(Simulation *sim, const char *filename) {

@@ -92,7 +92,6 @@ int main(int argc, char **argv) {
 
     mpiHelper.left_rank = (world_rank > 0) ? world_rank - 1 : MPI_PROC_NULL;
     mpiHelper.right_rank = (world_rank < world_size-1) ? world_rank + 1 : MPI_PROC_NULL;
-    mpiHelper.comm = MPI_COMM_WORLD;
 
 
     cudaDeviceProp prop;
@@ -175,9 +174,30 @@ int main(int argc, char **argv) {
 
     move_neccessary_data_before_printing(&sim);
 
-    print_global_diagnostics(&sim, conf.nSteps);
-    write_averaged_macros(&sim, "fields_avg.dat", &mpiHelper);
-    // write_paraview_files(&sim, conf.nSteps);
+
+
+    // Each rank has samples for its local cells
+    // Reduce to rank 0 for output
+    // int world_size = mpiHelper->worldSize;
+
+    Cell *global_samples = NULL;
+    if (world_rank == 0) {
+        global_samples = (Cell *)malloc(SAMPLES_SZ);
+        memset(global_samples, 0, SAMPLES_SZ);
+    }
+
+    // Each rank has samples for its local cells
+    // Reduce to rank 0 for output
+    MPI_Reduce(sim.samples, global_samples,
+                sizeof(Cell)/sizeof(float) * NX*NY*NZ,
+                MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if (world_rank == 0) {
+        print_global_diagnostics(&sim, conf.nSteps);
+        write_averaged_macros(&sim, "fields_avg.dat", global_samples);
+        if (global_samples != NULL) free(global_samples);
+        // write_paraview_files(&sim, conf.nSteps);
+    }
 
     clearPointers(&sim);
 

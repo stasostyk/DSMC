@@ -1,8 +1,6 @@
 #ifndef MPI_HELPER_H
 #define MPI_HELPER_H
 
-#include <mpi.h>
-
 typedef struct {
     int worldSize;
     int worldRank;
@@ -10,7 +8,6 @@ typedef struct {
 
     int left_rank;
     int right_rank;   // MPI neighbors (-1 if none)
-    MPI_Comm comm;
  
     // MPI Node will only take care of the grid slice with x = [xMin, xMax]
     float slabWidth;
