@@ -29,10 +29,12 @@ typedef struct {
     float *h_recv_left;
     float *h_recv_right;
 
-    float *d_send_left;
-    float *d_send_right;
+    // float *d_send_left;
+    // float *d_send_right;
     float *d_recv_left;
     float *d_recv_right;
+
+    float *d_send_left_mapped, *d_send_right_mapped;
 } MPIHelper;
 
 

@@ -123,18 +123,18 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
         mpiHelper->d_flag,
         mpiHelper->d_prefix_left,   // used for send_left indexing
         mpiHelper->d_prefix_right,  // used for send_right indexing  
-        mpiHelper->d_send_left,
-        mpiHelper->d_send_right,
+        mpiHelper->d_send_left_mapped,
+        mpiHelper->d_send_right_mapped,
         mpiHelper->d_prefix_keep,
         sim->d_new_P                // compacted survivors go here
     );
     CHECK_KERNELCALL();
 
-       // --- Copy send buffers device -> host ---
-    CHECK(cudaMemcpy(mpiHelper->h_send_left,  mpiHelper->d_send_left,
-                     left_n  * 6 * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(mpiHelper->h_send_right, mpiHelper->d_send_right,
-                     right_n * 6 * sizeof(float), cudaMemcpyDeviceToHost));
+    //    // --- Copy send buffers device -> host ---
+    // CHECK(cudaMemcpy(mpiHelper->h_send_left,  mpiHelper->d_send_left,
+    //                  left_n  * 6 * sizeof(float), cudaMemcpyDeviceToHost));
+    // CHECK(cudaMemcpy(mpiHelper->h_send_right, mpiHelper->d_send_right,
+    //                  right_n * 6 * sizeof(float), cudaMemcpyDeviceToHost));
 
 
     // --- Exchange counts ---

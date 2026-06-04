@@ -126,6 +126,13 @@ int main(int argc, char **argv) {
     cudaMallocHost(&mpiHelper.h_recv_left,  smallerParticleSize * 6 * sizeof(float));
     cudaMallocHost(&mpiHelper.h_recv_right, smallerParticleSize * 6 * sizeof(float));
 
+    cudaHostRegister(mpiHelper.h_send_left,  smallerParticleSize * 6 * sizeof(float), cudaHostRegisterMapped);
+    cudaHostRegister(mpiHelper.h_send_right, smallerParticleSize * 6 * sizeof(float), cudaHostRegisterMapped);
+
+    // Get device-side pointers to the pinned buffers
+    cudaHostGetDevicePointer(&mpiHelper.d_send_left_mapped,  mpiHelper.h_send_left,  0);
+    cudaHostGetDevicePointer(&mpiHelper.d_send_right_mapped, mpiHelper.h_send_right, 0);
+    
     initialize_particles(&sim, &mpiHelper);
 
     timer_end(&t);
