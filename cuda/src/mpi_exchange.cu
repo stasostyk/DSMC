@@ -23,7 +23,6 @@ __global__ void classify_particles_kernel(
 ) {
     __shared__ int s_count[2];
 
-
     if (threadIdx.x < 2) s_count[threadIdx.x] = 0;
     __syncthreads();
 
@@ -57,8 +56,6 @@ __global__ void scatter_send_kernel(
     int *d_flag, int *d_prefix_left, int *d_prefix_right,  // prefix sum of (flag==1) and (flag==2)
     float *send_left,            // packed: x,y,z,vx,vy,vz interleaved
     float *send_right
-    //, int *d_keep_prefix          // prefix sum of (flag==0)
-    //, Particles P_keep             // compacted in-place output
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
@@ -76,18 +73,7 @@ __global__ void scatter_send_kernel(
         send_right[j+2] = P.z[i];  send_right[j+3] = P.vx[i];
         send_right[j+4] = P.vy[i]; send_right[j+5] = P.vz[i];
     } 
-    // else {
-    //     int j = d_keep_prefix[i];
-    //     P_keep.x[j]  = P.x[i]; P_keep.y[j]  = P.y[i]; P_keep.z[j]  = P.z[i];
-    //     P_keep.vx[j] = P.vx[i]; P_keep.vy[j] = P.vy[i]; P_keep.vz[j] = P.vz[i];
-    // }
 }
-
-// void swap_particles_with_new_another_func(Simulation *sim) {
-//     Particles temp = sim->d_P;
-//     sim->d_P = sim->d_new_P;
-//     sim->d_new_P = temp;
-// }
 
 __global__ void unpack_recv_kernel(
     Particles P, int offset,
@@ -123,19 +109,15 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
 
     auto is_left  = thrust::make_transform_iterator(sim->d_valid, FlagEquals{1});
     auto is_right = thrust::make_transform_iterator(sim->d_valid, FlagEquals{2});
-    // auto is_keep  = thrust::make_transform_iterator(sim->d_valid, FlagEquals{0});
 
     cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
         is_left,  mpiHelper->d_prefix_left,  sim->NP);
     cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
         is_right, mpiHelper->d_prefix_right, sim->NP);
-    // cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
-    //     is_keep,  mpiHelper->d_prefix_keep,  sim->NP);
 
 
     int h_count[2];
     CHECK(cudaMemcpy(h_count, mpiHelper->d_count, 2 * sizeof(int), cudaMemcpyDeviceToHost));
-    // int keep_n  = h_count[0];
     int left_n  = h_count[0];
     int right_n = h_count[1];
 
@@ -146,7 +128,6 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-
     scatter_send_kernel<<<grid, block>>>(
         sim->d_P, sim->NP,
         sim->d_valid,
@@ -154,8 +135,6 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
         mpiHelper->d_prefix_right,  // used for send_right indexing  
         mpiHelper->d_send_left,
         mpiHelper->d_send_right
-        // ,mpiHelper->d_prefix_keep
-        // ,sim->d_new_P                // compacted survivors go here
     );
     CHECK_KERNELCALL();
 
@@ -164,7 +143,6 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
                      left_n  * 6 * sizeof(float), cudaMemcpyDeviceToHost));
     CHECK(cudaMemcpy(mpiHelper->h_send_right, mpiHelper->d_send_right,
                      right_n * 6 * sizeof(float), cudaMemcpyDeviceToHost));
-
 
     // --- Exchange counts ---
     int recv_left_n = 0, recv_right_n = 0;
@@ -183,16 +161,6 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
                  mpiHelper->h_recv_left,  recv_left_n  * 6, MPI_FLOAT, mpiHelper->left_rank,  3,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    // --- Copy recv buffers host -> device ---
-    // CHECK(cudaMemcpy(mpiHelper->d_recv_left,  mpiHelper->h_recv_left,
-    //                  recv_left_n  * 6 * sizeof(float), cudaMemcpyHostToDevice));
-    // CHECK(cudaMemcpy(mpiHelper->d_recv_right, mpiHelper->h_recv_right,
-    //                  recv_right_n * 6 * sizeof(float), cudaMemcpyHostToDevice));
-
-    // --- Unpack ---
-    // int recv_left_offset  = keep_n;
-    // int recv_right_offset = keep_n + recv_left_n;
-
     int recv_left_offset  = sim->NP;
     int recv_right_offset = sim->NP + recv_left_n;
 
@@ -210,8 +178,6 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
         );
         CHECK_KERNELCALL();
     }
- 
-    // CHECK(cudaMemset(sim->d_valid + sim->NP, 0, recv_left_n + recv_right_n));
 
     int recv_total = recv_left_n + recv_right_n;
     if (recv_total > 0) {
@@ -223,7 +189,6 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     }
 
     // swap_particles_with_new_another_func(sim);
-    // sim->NP = keep_n + recv_left_n + recv_right_n;
     sim->NP = sim->NP + recv_left_n + recv_right_n;
 }
 
