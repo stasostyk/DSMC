@@ -28,7 +28,7 @@ set(SOURCES
 # -------------------------
 add_executable(DSMC
     src/main.cu 
-    ${DSMC_SOURCES}
+    ${SOURCES}
 )
 
 target_link_libraries(DSMC PRIVATE m)
@@ -45,7 +45,7 @@ find_package(MPI REQUIRED)
 add_executable(DSMC_mpi
     src/main_mpi.cu      # your MPI version
     src/mpi_exchange.cu
-    ${DSMC_SOURCES}
+    ${SOURCES}
 )
 
 target_link_libraries(DSMC_mpi PRIVATE
