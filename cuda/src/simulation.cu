@@ -10,6 +10,11 @@
 #include "../include/cuda_utils.h"
 #include <cub/cub.cuh>
 
+#include <thrust/sequence.h>
+#include <thrust/sort.h>
+#include <thrust/execution_policy.h>  
+#include <thrust/device_ptr.h>
+
 void swap_particles_with_new(Simulation *sim) {
     Particles temp = sim->d_P;
     sim->d_P = sim->d_new_P;
@@ -66,6 +71,11 @@ void setup(Simulation *sim, Config *conf) {
     CHECK(cudaMalloc(&sim->d_particleIds, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&sim->d_cellKeys, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&sim->d_cellCountPrefSumCopy, max(CELL_COUNT_SZ, sizeof(int) * MAX_PARTICLES)));
+
+    CHECK(cudaMalloc(&sim->d_sortedCells, CELL_COUNT_SZ));
+    CHECK(cudaMalloc(&sim->d_cellCountSorted, CELL_COUNT_SZ));
+
+    CHECK(cudaMalloc(&sim->d_workQueueHead, sizeof(unsigned int)));
 
     sim->temp_storage_bytes = 0;
     sim->d_temp_storage = nullptr;
@@ -389,6 +399,35 @@ void filter_and_index_particles(Simulation *sim) {
         NX * NY * NZ
     );
 
+    // SORT CELL COUNTS (FOR COLLISIONS)
+    int totalCells = sim->conf->totalCells;
+
+    // Re-initialize keys 0..totalCells-1 each step since sort is destructive
+    thrust::sequence(
+        thrust::device,
+        sim->d_sortedCells,
+        sim->d_sortedCells + totalCells,
+        0
+    );
+
+    // Copy counts into scratch (sort_by_key destroys the key array)
+    CHECK(cudaMemcpy(
+        sim->d_cellCountSorted, sim->d_cellCount,
+        sizeof(int) * totalCells, cudaMemcpyDeviceToDevice
+    ));
+
+    // Sort cell indices by descending count
+    // d_cellCountSorted = keys (counts), d_sortedCells = values (indices)
+    thrust::sort_by_key(
+        thrust::device,
+        sim->d_cellCountSorted,           // keys: counts
+        sim->d_cellCountSorted + totalCells,
+        sim->d_sortedCells,               // values: cell indices
+        thrust::greater<int>()            // descending
+    );
+
+    // END OF SORT CELL COUNTS
+
     // Copy prefix sum into a mutable "cursor" array (reuse d_particleIds as scratch)
     CHECK(cudaMemcpy(sim->d_cellCountPrefSumCopy, sim->d_cellCountPrefixSum,
             sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice));
@@ -419,8 +458,6 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
     float y1 = y0 + d_conf.dt * P.vy[i];
     float z1 = z0 + d_conf.dt * P.vz[i];
 
-    curandState rngState = rngStates[i];
-
     // CHECK WINGS
     for (int wingId = 0; wingId < d_conf.wingCnt; wingId++) {
         float WingY = d_conf.wings[wingId].WingY;
@@ -436,6 +473,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
             float Zw=( z0*(WingY-y1)+z1*(y0-WingY))/(y0-y1);
             if ( Zw < 0.3 || Zw > 0.7 ) continue; // wing only occupies 0.3 < z < 0.7
             if ( Xw > WingX && Xw < WingX + WingLength ) {
+                curandState rngState = rngStates[i];
                 // Molecule interacts with the wing during the time step
                 // Linear interpolation of the time of scattering, Eq. (6.5.4)
                 float Dt1 = dt - dt * ( y0 - WingY ) / ( y0 - y1 );
@@ -446,6 +484,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
                     d_conf.KB,
                     &rngState
                 );
+                rngStates[i] = rngState;
                 // Move the reflected molecule
                 x1 = Xw + Dt1 * P.vx[i];
                 y1 = WingY + Dt1 * P.vy[i];
@@ -455,6 +494,19 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
 
     // CHECK BALLS
     for (int ballId = 0; ballId < d_conf.ballCnt; ballId++) {
+        // Before doing expensive test, first we can check
+        // if the particle is close enough to the ball, i.e.
+        // if the particle after movement got into the ball.
+
+        // Sphere center
+        float cx = d_conf.balls[ballId].ballCenterX;
+        float cy = d_conf.balls[ballId].ballCenterY;
+        float cz = d_conf.balls[ballId].ballCenterZ;
+        float ballRadius = d_conf.balls[ballId].ballRadius;
+        
+        float distSquared = (x1 - cx) * (x1 - cx) + (y1 - cy) * (y1 - cy) + (z1 - cz) * (z1 - cz);
+        if (distSquared > ballRadius * ballRadius) continue;
+
         // Ray-sphere intersection test
         
         // Direction of motion
@@ -462,56 +514,53 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
         float dy = y1 - y0;
         float dz = z1 - z0;
 
-        // Sphere center
-        float cx = d_conf.balls[ballId].ballCenterX;
-        float cy = d_conf.balls[ballId].ballCenterY;
-        float cz = d_conf.balls[ballId].ballCenterZ;
-        float ballRadius = d_conf.balls[ballId].ballRadius;
-
         // Shifted initial position
         float rx = x0 - cx;
         float ry = y0 - cy;
         float rz = z0 - cz;
-
+ 
         // Quadratic coefficients: |r + t d|^2 = R^2
         float a = dx*dx + dy*dy + dz*dz;
-        float b = 2.0 * (rx*dx + ry*dy + rz*dz);
+        float b = 2.0f * (rx*dx + ry*dy + rz*dz);
         float c = rx*rx + ry*ry + rz*rz - ballRadius*ballRadius;
 
-        float disc = b*b - 4.0*a*c;
+        float disc = b*b - 4.0f*a*c;
 
-        if (disc >= 0.0) {
+        if (disc >= 0.0f) {
             float sqrt_disc = sqrt(disc);
 
             // time solutions
-            float t1 = (-b - sqrt_disc) / (2.0*a);
-            float t2 = (-b + sqrt_disc) / (2.0*a);
+            float inv2a   = 1.0f / (2.0f * a);
+            float t1 = (-b - sqrt_disc) * inv2a;
+            float t2 = (-b + sqrt_disc) * inv2a;
 
             // pick earliest valid intersection in [0,1]
-            float t_hit = -1.0;
-            if (t1 >= 0.0 && t1 <= 1.0) t_hit = t1;
-            else if (t2 >= 0.0 && t2 <= 1.0) t_hit = t2;
+            float t_hit = -1.0f;
+            if (t1 >= 0.0f && t1 <= 1.0f) t_hit = t1;
+            else if (t2 >= 0.0f && t2 <= 1.0f) t_hit = t2;
 
-            if (t_hit >= 0.0) {
+            if (t_hit >= 0.0f) {
                 // Intersection point
                 float Xw = x0 + t_hit * dx;
                 float Yw = y0 + t_hit * dy;
                 float Zw = z0 + t_hit * dz;
 
                 // Remaining time after collision
-                float Dt1 = d_conf.dt * (1.0 - t_hit);
+                float Dt1 = d_conf.dt * (1.0f - t_hit);
 
                 // Surface normal (outward)
                 float nx = (Xw - cx) / ballRadius;
                 float ny = (Yw - cy) / ballRadius;
                 float nz = (Zw - cz) / ballRadius;
 
+                curandState rngState = rngStates[i];
                 // Diffuse reflection aligned with normal
                 diffuse_scattering_device(&(P.vx[i]), &(P.vy[i]), &(P.vz[i]),
                                 d_conf.moleculeMass, d_conf.balls[ballId].Tb,
                                 nx, ny, nz, d_conf.KB,
                                 &rngState
                             );
+                rngStates[i] = rngState;
 
                 // Move after collision
                 x1 = Xw + Dt1 * P.vx[i];
@@ -526,7 +575,6 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
     P.y[i] = y1;
     P.z[i] = z1;
 
-    rngStates[i] = rngState;
 }
 
 void move_particles(Simulation *sim) {
@@ -621,4 +669,9 @@ void clearPointers(Simulation *sim) {
     CHECK(cudaFree(sim->d_particleIds));
     CHECK(cudaFree(sim->d_cellKeys));
     CHECK(cudaFree(sim->d_cellCountPrefSumCopy));
+
+    CHECK(cudaFree(sim->d_sortedCells));
+    CHECK(cudaFree(sim->d_cellCountSorted));
+
+    CHECK(cudaFree(sim->d_workQueueHead));
 }

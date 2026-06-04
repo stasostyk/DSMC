@@ -39,6 +39,11 @@ typedef struct {
     int *d_cellKeys;
     int *d_cellCountPrefSumCopy;
 
+    int *d_sortedCells;     // indices 0..NX*NY*NZ-1 sorted by descending cellCount
+    int *d_cellCountSorted; // scratch — counts reordered alongside keys
+
+    unsigned int *d_workQueueHead;
+
     // counters
     int sampleSteps;
     int NP;
