@@ -33,7 +33,7 @@ MONITOR_PID=$!
 
 #srun --ntasks=1 nvidia-smi
 #  srun nsys profile --trace=cuda --stats=true --output="$HOME/nsys-out" ./DSMC BALL
-srun ./DSMC BALL
+srun ./DSMC_mpi BALL
 
 #srun --ntasks=2 --gpus-per-task=1 \
     #bash -c 'if [ $SLURM_PROCID -eq 0 ]; then
