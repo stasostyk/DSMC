@@ -1,8 +1,6 @@
 #ifndef MPI_HELPER_H
 #define MPI_HELPER_H
 
-#include <cuda_runtime.h>
-
 typedef struct {
     int worldSize;
     int worldRank;
@@ -34,10 +32,6 @@ typedef struct {
 
     int bufferToSendLeftCount;
     int bufferToSendRightCount;
-
-    cudaStream_t exchangeCopyStream; // to interleave D2H transfer with MPI sending
-    cudaStream_t stream1, stream2, stream3; // some more parallelization
-    
 } MPIHelper;
 
 
