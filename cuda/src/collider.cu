@@ -31,7 +31,9 @@ __global__ void ntcs_work_queue_kernel(
         // Use pre-sorted order: heavy cells first
         int idx = sortedCells[cellQueueIdx];
         int NPC = cellCount[idx];
-        if (NPC < 2 || NPC >= d_conf.hss_threshold) continue;
+        // if (NPC < 2 || NPC >= d_conf.hss_threshold) continue; 
+        // HSS threshold doesn't need to be checked because we moved the queue head already.
+        if (NPC < 2) continue;
 
         // Particles for this cell are contiguous starting at this offset
         int offset = cellCountPrefixSum[idx];
@@ -103,8 +105,32 @@ __global__ void ntcs_work_queue_kernel(
         atomicAdd(total_collisions, (unsigned long long)collisionsBlock[0]);
 }
 
+__global__ void find_queue_start_kernel(
+    unsigned int *workQueueHead,
+    const int *sortedCells,
+    const int *cellCount,
+    int totalCells
+) {
+    // Single-thread binary search on device
+    if (threadIdx.x != 0 || blockIdx.x != 0) return;
+
+    int lo = 0, hi = totalCells;
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (cellCount[sortedCells[mid]] >= d_conf.hss_threshold)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    *workQueueHead = (unsigned int)lo;
+}
+
 void collide_particles(Simulation *sim) {
-    cudaMemset(sim->d_workQueueHead, 0, sizeof(unsigned int));
+    // Binary search the queue head - done on device because cell counts are stored there.
+    find_queue_start_kernel<<<1, 1>>>(
+        sim->d_workQueueHead, sim->d_sortedCells, sim->d_cellCount, sim->conf->totalCells
+    );
+    CHECK_KERNELCALL();
 
     // Launch exactly as many threads as the GPU can run simultaneously —
     // more than this just adds atomic contention on workQueueHead
