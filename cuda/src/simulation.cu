@@ -423,7 +423,7 @@ void filter_and_index_particles(Simulation *sim, bool useMPI) {
     );
 
     // SORT CELL COUNTS (FOR COLLISIONS)
-    int totalCells = NX * NY * NZ;
+    int totalCells = sim->conf->totalCells;
 
     // Re-initialize keys 0..totalCells-1 each step since sort is destructive
     thrust::sequence(

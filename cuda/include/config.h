@@ -59,6 +59,7 @@ typedef struct {
     float NFree;
     float UFree;
     float UxFree, UyFree, UzFree;
+    int totalCells;
 
     // derived, used in collider
     double sigmaRef;
