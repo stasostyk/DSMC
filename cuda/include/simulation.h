@@ -55,7 +55,7 @@ typedef struct {
 } Simulation;
 
 void setup(Simulation *sim, Config *conf);
-void filter_and_index_particles(Simulation *sim);
+void filter_and_index_particles(Simulation *sim, bool useMPI);
 void initialize_particles(Simulation *sim, MPIHelper *mpiHelper);
 void apply_boundary_conditions_free_stream(Simulation *sim, MPIHelper *mpiHelper);
 void move_particles(Simulation *sim);

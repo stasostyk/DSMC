@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
 
         exchange_boundary_particles(&sim, &mpiHelper);
 
-        filter_and_index_particles(&sim);
+        filter_and_index_particles(&sim, true);
         
         // collide_particles_hss(&sim);
         collide_particles(&sim);

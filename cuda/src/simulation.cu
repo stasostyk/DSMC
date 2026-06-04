@@ -220,12 +220,12 @@ void generate_particles_in_rect(
     sim->NP += Nnew;
 }
 
-__global__ void mark_valid_kernel(Particles P, int *valid, int NP) {
+__global__ void mark_valid_kernel(Particles P, int *valid, int NP, bool useMPI) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
     // the MPI exchange should have left valid[i] = 0 for the ones that are left
-    valid[i] = (valid[i] == 0) &&
+    valid[i] = (!useMPI || valid[i] == 0) &&
         (P.x[i] >= 0.0f && P.x[i] < d_conf.Lx &&
          P.y[i] >= 0.0f && P.y[i] < d_conf.Ly &&
          P.z[i] >= 0.0f && P.z[i] < d_conf.Lz);
@@ -383,12 +383,14 @@ __global__ void counting_sort_scatter_kernel(
     P_out.vz[dest] = P_in.vz[i];
 }
 
-void filter_and_index_particles(Simulation *sim) {
+void filter_and_index_particles(Simulation *sim, bool useMPI) {
     int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
-    mark_valid_kernel<<<blocksPerGrid, threadsPerBlock>>>(sim->d_P, sim->d_valid, sim->NP);
+    mark_valid_kernel<<<blocksPerGrid, threadsPerBlock>>>(
+        sim->d_P, sim->d_valid, sim->NP, useMPI
+    );
     CHECK_KERNELCALL();
 
     // valid -> particle new index map
