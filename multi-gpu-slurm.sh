@@ -23,7 +23,7 @@ rm -rf build
 mkdir -p build
 cd build
 
-cmake ..
+cmake .. -DCMAKE_CUDA_ARCHITECTURES=70
 
 make -j$(nproc)
 
