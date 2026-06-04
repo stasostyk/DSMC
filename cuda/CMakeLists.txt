@@ -14,7 +14,6 @@ set(CMAKE_CUDA_ARCHITECTURES "70-real")
 find_package(MPI REQUIRED)
 
 set(SOURCES
-    src/main.cu
     src/math_utils.cu 
     src/config.cu 
     src/collider.cu
@@ -22,30 +21,47 @@ set(SOURCES
     src/simulation.cu
     src/io_utils.cu
     src/timer.cu
-    src/mpi_exchange.cu
 )
 
-# Executable
-add_executable(DSMC ${SOURCES})
-target_link_libraries(DSMC PRIVATE 
-    m
-    ${MPI_C_LIBRARIES}
+# -------------------------
+# NON-MPI executable
+# -------------------------
+add_executable(DSMC
+    src/main.cu 
+    ${DSMC_SOURCES}
 )
 
-target_include_directories(DSMC PRIVATE
-    ${MPI_C_INCLUDE_DIRS}
-)
+target_link_libraries(DSMC PRIVATE m)
 
 set_target_properties(DSMC PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
+)
 
-    # Tell nvcc to use mpicc as the host compiler
+# -------------------------
+# MPI executable
+# -------------------------
+find_package(MPI REQUIRED)
+
+add_executable(DSMC_mpi
+    src/main_mpi.cu      # your MPI version
+    src/mpi_exchange.cu
+    ${DSMC_SOURCES}
+)
+
+target_link_libraries(DSMC_mpi PRIVATE
+    m
+    MPI::MPI_C
+)
+
+target_include_directories(DSMC_mpi PRIVATE
+    ${MPI_C_INCLUDE_DIRS}
+)
+
+set_target_properties(DSMC_mpi PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
     CUDA_HOST_COMPILER ${MPI_C_COMPILER}
 )
 
-# Tell nvcc to pass MPI include paths through to the host compiler
-target_compile_options(DSMC PRIVATE
-    $<$<COMPILE_LANGUAGE:CUDA>:
-        -Xcompiler=${MPI_C_COMPILE_FLAGS}
-    >
+target_compile_options(DSMC_mpi PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=${MPI_C_COMPILE_FLAGS}>
 )
