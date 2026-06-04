@@ -119,8 +119,8 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     //     is_keep,  mpiHelper->d_prefix_keep,  sim->NP);
 
 
-    int h_count[3];
-    CHECK(cudaMemcpy(h_count, mpiHelper->d_count, 3 * sizeof(int), cudaMemcpyDeviceToHost));
+    int h_count[2];
+    CHECK(cudaMemcpy(h_count, mpiHelper->d_count, 2 * sizeof(int), cudaMemcpyDeviceToHost));
     // int keep_n  = h_count[0];
     int left_n  = h_count[0];
     int right_n = h_count[1];
