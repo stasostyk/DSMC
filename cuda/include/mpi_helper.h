@@ -20,7 +20,6 @@ typedef struct {
 
     // Three boolean arrays for CUB scans
     int *d_flag;
-    int *d_is_left, *d_is_right, *d_is_keep;   // precomputed from d_flag
     int *d_prefix_left, *d_prefix_right, *d_prefix_keep;
     int *d_count;
 
