@@ -155,10 +155,10 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
     // --- Copy recv buffers host -> device ---
-    CHECK(cudaMemcpy(mpiHelper->d_recv_left,  mpiHelper->h_recv_left,
-                     recv_left_n  * 6 * sizeof(float), cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(mpiHelper->d_recv_right, mpiHelper->h_recv_right,
-                     recv_right_n * 6 * sizeof(float), cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(mpiHelper->d_recv_left,  mpiHelper->h_recv_left,
+    //                  recv_left_n  * 6 * sizeof(float), cudaMemcpyHostToDevice));
+    // CHECK(cudaMemcpy(mpiHelper->d_recv_right, mpiHelper->h_recv_right,
+    //                  recv_right_n * 6 * sizeof(float), cudaMemcpyHostToDevice));
 
     // --- Unpack ---
     int recv_left_offset  = keep_n;
@@ -167,14 +167,14 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     if (recv_left_n > 0) {
         unpack_recv_kernel<<<(recv_left_n + threads-1)/threads, block>>>(
             sim->d_new_P, recv_left_offset,
-            mpiHelper->d_recv_left, recv_left_n
+            mpiHelper->d_recv_left_mapped, recv_left_n
         );
         CHECK_KERNELCALL();
     }
     if (recv_right_n > 0) {
         unpack_recv_kernel<<<(recv_right_n + threads-1)/threads, block>>>(
             sim->d_new_P, recv_right_offset,
-            mpiHelper->d_recv_right, recv_right_n
+            mpiHelper->d_recv_right_mapped, recv_right_n
         );
         CHECK_KERNELCALL();
     }

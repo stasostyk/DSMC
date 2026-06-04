@@ -94,6 +94,14 @@ int main(int argc, char **argv) {
     mpiHelper.right_rank = (world_rank < world_size-1) ? world_rank + 1 : MPI_PROC_NULL;
     mpiHelper.comm = MPI_COMM_WORLD;
 
+
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, world_rank % num_gpus);
+    if (!prop.canMapHostMemory) {
+        fprintf(stderr, "Device does NOT support mapped host memory\n");
+        MPI_Finalize();
+        return 0;
+    }
     // mpiHelper.kOffset = world_rank * NX / world_size;
     // mpiHelper.kOffset = 0;
 
@@ -109,8 +117,8 @@ int main(int argc, char **argv) {
     CHECK(cudaMalloc(&mpiHelper.d_count,  3 * sizeof(int)));
     CHECK(cudaMalloc(&mpiHelper.d_send_left, 6 * sizeof(float) * smallerParticleSize));
     CHECK(cudaMalloc(&mpiHelper.d_send_right, 6 * sizeof(float) * smallerParticleSize));
-    CHECK(cudaMalloc(&mpiHelper.d_recv_left, 6 * sizeof(float) * smallerParticleSize));
-    CHECK(cudaMalloc(&mpiHelper.d_recv_right, 6 * sizeof(float) * smallerParticleSize));
+    // CHECK(cudaMalloc(&mpiHelper.d_recv_left, 6 * sizeof(float) * smallerParticleSize));
+    // CHECK(cudaMalloc(&mpiHelper.d_recv_right, 6 * sizeof(float) * smallerParticleSize));
     CHECK(cudaMalloc(&mpiHelper.d_flag, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_prefix_keep, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_prefix_right, sizeof(int) * MAX_PARTICLES));
@@ -121,6 +129,13 @@ int main(int argc, char **argv) {
     CHECK(cudaMallocHost(&mpiHelper.h_send_right, smallerParticleSize * 6 * sizeof(float)));
     CHECK(cudaMallocHost(&mpiHelper.h_recv_left,  smallerParticleSize * 6 * sizeof(float)));
     CHECK(cudaMallocHost(&mpiHelper.h_recv_right, smallerParticleSize * 6 * sizeof(float)));
+
+    // Recv side: access is sequential in unpack_recv_kernel, so zero-copy is fine
+    cudaHostAlloc(&mpiHelper.h_recv_left,  smallerParticleSize * 6 * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc(&mpiHelper.h_recv_right, smallerParticleSize * 6 * sizeof(float), cudaHostAllocMapped);
+    cudaHostGetDevicePointer(&mpiHelper.d_recv_left_mapped,  mpiHelper.h_recv_left,  0);
+    cudaHostGetDevicePointer(&mpiHelper.d_recv_right_mapped, mpiHelper.h_recv_right, 0);
+
 
     initialize_particles(&sim, &mpiHelper);
 
@@ -170,8 +185,8 @@ int main(int argc, char **argv) {
     CHECK(cudaFree(mpiHelper.d_count));
     CHECK(cudaFree(mpiHelper.d_send_left));
     CHECK(cudaFree(mpiHelper.d_send_right));
-    CHECK(cudaFree(mpiHelper.d_recv_left));
-    CHECK(cudaFree(mpiHelper.d_recv_right));
+    // CHECK(cudaFree(mpiHelper.d_recv_left));
+    // CHECK(cudaFree(mpiHelper.d_recv_right));
     CHECK(cudaFreeHost(mpiHelper.h_recv_left));
     CHECK(cudaFreeHost(mpiHelper.h_recv_right));
     CHECK(cudaFreeHost(mpiHelper.h_send_left));
