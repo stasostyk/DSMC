@@ -87,7 +87,7 @@ void setup(Simulation *sim, Config *conf) {
         sim->temp_storage_bytes, 
         sim->d_cellCount, 
         sim->d_cellCountPrefixSum, 
-        NX_local*NY*NZ);
+        NX*NY*NZ);
     cudaMalloc(&sim->d_temp_storage, sim->temp_storage_bytes);
 
     // Also check for exclusive sum again
@@ -114,7 +114,7 @@ void setup(Simulation *sim, Config *conf) {
     cudaMemset(sim->d_totalCollisions, 0, sizeof(unsigned long long));
     cudaMemset(sim->d_samples, 0, SAMPLES_SZ);
 
-    sim->NP = NX_local * NY * NZ * conf->particlesPerCellTarget;
+    sim->NP = NX * NY * NZ * conf->particlesPerCellTarget;
 
     if (sim->NP > MAX_PARTICLES) {
         fprintf(stderr, "Too many particles for MAX_PARTICLES\n");
@@ -326,7 +326,7 @@ void apply_boundary_conditions_free_stream(Simulation *sim, MPIHelper *mpiHelper
 __global__ void scatter_and_key_kernel(
     Particles P, Particles P_out, int *valid, int *particleIds, 
     int *cellKeys, int *cellCount,
-    int NP, int kOffset
+    int NP
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
@@ -352,7 +352,7 @@ __global__ void scatter_and_key_kernel(
     int l = __float2int_rd(y * d_conf.inv_dy);
     int m = __float2int_rd(z * d_conf.inv_dz);
 
-    int cell = IDX_CELL(k - kOffset,l,m);
+    int cell = IDX_CELL(k,l,m);
     cellKeys[j] = cell;
     atomicAdd(&cellCount[cell], 1);
 }
@@ -408,8 +408,7 @@ void filter_and_index_particles(Simulation *sim, MPIHelper *mpiHelper) {
         sim->d_valid, sim->d_particleIds,
         sim->d_cellKeys, 
         sim->d_cellCount,
-        sim->NP,
-        mpiHelper->kOffset
+        sim->NP
     );
     CHECK_KERNELCALL();
 
@@ -419,11 +418,11 @@ void filter_and_index_particles(Simulation *sim, MPIHelper *mpiHelper) {
     cub::DeviceScan::ExclusiveSum(
         sim->d_temp_storage, sim->temp_storage_bytes,
         sim->d_cellCount, sim->d_cellCountPrefixSum,
-        NX_local * NY * NZ
+        NX * NY * NZ
     );
 
     // SORT CELL COUNTS (FOR COLLISIONS)
-    int totalCells = NX_local * NY * NZ;
+    int totalCells = NX * NY * NZ;
 
     // Re-initialize keys 0..totalCells-1 each step since sort is destructive
     thrust::sequence(
@@ -453,7 +452,7 @@ void filter_and_index_particles(Simulation *sim, MPIHelper *mpiHelper) {
 
     // Copy prefix sum into a mutable "cursor" array (reuse d_particleIds as scratch)
     CHECK(cudaMemcpy(sim->d_cellCountPrefSumCopy, sim->d_cellCountPrefixSum,
-            sizeof(int) * NX_local * NY * NZ, cudaMemcpyDeviceToDevice));
+            sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice));
 
     counting_sort_scatter_kernel<<<blocksNew, threadsPerBlock>>>(
         sim->d_new_P, sim->d_P,
@@ -610,16 +609,15 @@ void move_particles(Simulation *sim) {
 }
 
 __global__ void accumulate_sampling_kernel(
-    int *cellCount, int *cellCountPrefixSum, Cell *samples, Particles P,
-    int kOffset
+    int *cellCount, int *cellCountPrefixSum, Cell *samples, Particles P
 ) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     int l = blockIdx.y * blockDim.y + threadIdx.y;
     int m = blockIdx.z * blockDim.z + threadIdx.z;
 
-    if (k >= NX_local || l >= NY || m >= NZ) return;
+    if (k >= NX || l >= NY || m >= NZ) return;
     
-    int cellIdx = IDX_CELL(k-kOffset, l, m);
+    int cellIdx = IDX_CELL(k, l, m);
     int offset = cellCountPrefixSum[cellIdx];
 
     int Nc = cellCount[cellIdx];
@@ -632,10 +630,10 @@ __global__ void accumulate_sampling_kernel(
         float vy = P.vy[i];
         float vz = P.vz[i];
 
-        samples[IDX_CELL(k-kOffset, l, m)].countVx += vx;
-        samples[IDX_CELL(k-kOffset, l, m)].countVy += vy;
-        samples[IDX_CELL(k-kOffset, l, m)].countVz += vz;
-        samples[IDX_CELL(k-kOffset, l, m)].countV2 += vx * vx + vy * vy + vz * vz;
+        samples[IDX_CELL(k, l, m)].countVx += vx;
+        samples[IDX_CELL(k, l, m)].countVy += vy;
+        samples[IDX_CELL(k, l, m)].countVz += vz;
+        samples[IDX_CELL(k, l, m)].countV2 += vx * vx + vy * vy + vz * vz;
     }
 }
 
@@ -645,14 +643,13 @@ void accumulate_sampling(Simulation *sim, MPIHelper *mpiHelper) {
 
     dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
-        (NX_local + threadsPerBlock.x - 1) / threadsPerBlock.x,
+        (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
         (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
     );
 
     accumulate_sampling_kernel<<<blocksPerGrid, threadsPerBlock>>>(
-        sim->d_cellCount, sim->d_cellCountPrefixSum, sim->d_samples, sim->d_P,
-        mpiHelper->kOffset
+        sim->d_cellCount, sim->d_cellCountPrefixSum, sim->d_samples, sim->d_P
     );
     CHECK_KERNELCALL();
 }

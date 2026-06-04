@@ -39,7 +39,7 @@ void print_global_diagnostics(Simulation *sim, int step) {
 void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpiHelper) {
     // Each rank has samples for its local cells
     // Reduce to rank 0 for output
-    int world_size = mpiHelper->worldSize;
+    // int world_size = mpiHelper->worldSize;
     int world_rank = mpiHelper->worldRank;
 
     Cell *global_samples = NULL;
@@ -49,7 +49,6 @@ void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpi
 
     // Each rank has samples for its local cells
     // Reduce to rank 0 for output
-    Cell *global_samples = (Cell *)malloc(SAMPLES_SZ);
     MPI_Reduce(sim->samples, global_samples,
                 sizeof(Cell)/sizeof(float) * NX*NY*NZ,
                 MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
