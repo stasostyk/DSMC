@@ -55,11 +55,11 @@ typedef struct {
 } Simulation;
 
 void setup(Simulation *sim, Config *conf);
-void filter_and_index_particles(Simulation *sim, MPIHelper *mpiHelper);
+void filter_and_index_particles(Simulation *sim);
 void initialize_particles(Simulation *sim, MPIHelper *mpiHelper);
 void apply_boundary_conditions_free_stream(Simulation *sim, MPIHelper *mpiHelper);
 void move_particles(Simulation *sim);
-void accumulate_sampling(Simulation *sim, MPIHelper *mpiHelper);
+void accumulate_sampling(Simulation *sim);
 void clearPointers(Simulation *sim);
 
 #endif // SIMULATION_H

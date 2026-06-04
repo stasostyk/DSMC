@@ -290,8 +290,11 @@ void initialize_particles(Simulation *sim, MPIHelper *mpiHelper) {
     sim->NP = 0;
     // generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
     
+    float xMin = (mpiHelper == NULL) ? 0.0f : mpiHelper->xMin;
+    float xMax = (mpiHelper == NULL) ? sim->conf->Lx : mpiHelper->xMax;
+
     // only fill particles in the MPI node's domain [xmin, xmax]
-    generate_particles_in_rect(sim, mpiHelper->xMin, mpiHelper->xMax, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
+    generate_particles_in_rect(sim, xMin, xMax, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
 
     remove_particles_inside_balls(sim);
 }
@@ -305,14 +308,17 @@ void apply_boundary_conditions_free_stream(Simulation *sim, MPIHelper *mpiHelper
     // generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, 1);
     // generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, 1);
 
-    float xMin = mpiHelper->xMin;
-    float xMax = mpiHelper->xMax;
+    int worldRank = (mpiHelper == NULL) ? 0 : mpiHelper->worldRank;
+    int worldSize = (mpiHelper == NULL) ? 1 : mpiHelper->worldSize;
+
+    float xMin = (mpiHelper==NULL) ? 0.0f : mpiHelper->xMin;
+    float xMax = (mpiHelper==NULL) ? sim->conf->Lx : mpiHelper->xMax;
 
     // X faces: injects at physical boundaries
-    if (mpiHelper->worldRank == 0)
+    if (worldRank == 0)
         generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, 1);
     
-    if (mpiHelper->worldRank == mpiHelper->worldSize-1)
+    if (worldRank == worldSize-1)
         generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, 1);
     
     // Y and Z faces: all ranks inject
@@ -377,7 +383,7 @@ __global__ void counting_sort_scatter_kernel(
     P_out.vz[dest] = P_in.vz[i];
 }
 
-void filter_and_index_particles(Simulation *sim, MPIHelper *mpiHelper) {
+void filter_and_index_particles(Simulation *sim) {
     int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
@@ -638,7 +644,7 @@ __global__ void accumulate_sampling_kernel(
 }
 
 
-void accumulate_sampling(Simulation *sim, MPIHelper *mpiHelper) {
+void accumulate_sampling(Simulation *sim) {
     sim->sampleSteps++;
 
     dim3 threadsPerBlock(4, 4, 4);
