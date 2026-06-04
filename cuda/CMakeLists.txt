@@ -26,14 +26,14 @@ set(SOURCES
 # -------------------------
 # NON-MPI executable
 # -------------------------
-add_executable(DSMC
+add_executable(DSMC_single_gpu
     src/main.cu 
     ${SOURCES}
 )
 
-target_link_libraries(DSMC PRIVATE m)
+target_link_libraries(DSMC_single_gpu PRIVATE m)
 
-set_target_properties(DSMC PROPERTIES
+set_target_properties(DSMC_single_gpu PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
 )
 
