@@ -1,9 +1,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <cuda_runtime.h>
+#include "../../cuda_utils.h"
 #include "../include/io_utils.h"
 #include "../include/simulation.h"
 #include "../include/mpi_helper.h"
+
+void move_neccessary_data_before_printing(Simulation *sim) {
+    // Particle data is mostly stored in and dealt in GPU, 
+    // to have the newest version in CPU, it needs to be copied.
+   
+    CHECK(cudaMemcpy(&sim->totalCollisions, sim->d_totalCollisions, sizeof(unsigned long long), cudaMemcpyDeviceToHost))
+
+    CHECK(cudaMemcpy(sim->P.x, sim->d_P.x, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->P.y, sim->d_P.y, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->P.z, sim->d_P.z, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->P.vx, sim->d_P.vx, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->P.vy, sim->d_P.vy, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(sim->P.vz, sim->d_P.vz, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
+
+    CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
+} 
 
 void print_global_diagnostics(Simulation *sim, int step) {
     double sumVx = 0.0, sumVy = 0.0, sumVz = 0.0;

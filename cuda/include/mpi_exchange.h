@@ -9,5 +9,6 @@
 void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper);
 void setupMPIHelper(MPIHelper *mpiHelper, Config *conf);
 Cell *reduceSamples(Simulation *sim, MPIHelper *mpiHelper);
+void freeMPIHelper(MPIHelper *mpiHelper);
 
 #endif

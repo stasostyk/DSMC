@@ -14,22 +14,6 @@
 
 #include <mpi.h>
 
-void move_neccessary_data_before_printing(Simulation *sim) {
-    // Particle data is mostly stored in and dealt in GPU, 
-    // to have the newest version in CPU, it needs to be copied.
-   
-    CHECK(cudaMemcpy(&sim->totalCollisions, sim->d_totalCollisions, sizeof(unsigned long long), cudaMemcpyDeviceToHost))
-
-    CHECK(cudaMemcpy(sim->P.x, sim->d_P.x, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->P.y, sim->d_P.y, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->P.z, sim->d_P.z, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->P.vx, sim->d_P.vx, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->P.vy, sim->d_P.vy, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->P.vz, sim->d_P.vz, sim->NP * sizeof(float), cudaMemcpyDeviceToHost));
-
-    CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
-} 
-
 int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
     
@@ -103,21 +87,7 @@ int main(int argc, char **argv) {
 
     move_neccessary_data_before_printing(&sim);
 
-    // Each rank has samples for its local cells
-    // Reduce to rank 0 for output
-    // int world_size = mpiHelper->worldSize;
-
-    Cell *global_samples = NULL;
-    if (mpiHelper.worldRank == 0) {
-        global_samples = (Cell *)malloc(SAMPLES_SZ);
-        memset(global_samples, 0, SAMPLES_SZ);
-    }
-
-    // Each rank has samples for its local cells
-    // Reduce to rank 0 for output
-    MPI_Reduce(sim.samples, global_samples,
-                sizeof(Cell)/sizeof(float) * NX*NY*NZ,
-                MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+    Cell *global_samples = reduceSamples(&sim, &mpiHelper);
 
     if (mpiHelper.worldRank == 0) {
         print_global_diagnostics(&sim, conf.nSteps);
@@ -130,16 +100,6 @@ int main(int argc, char **argv) {
 
     timer_end(&allProgramTimer);
     timer_print(&allProgramTimer, "ALL PROGRAM FINISHED");
-
-    CHECK(cudaFree(mpiHelper.d_prefix_left));
-    CHECK(cudaFree(mpiHelper.d_prefix_right));
-    CHECK(cudaFree(mpiHelper.d_count));
-    CHECK(cudaFree(mpiHelper.d_send_left));
-    CHECK(cudaFree(mpiHelper.d_send_right));
-    CHECK(cudaFreeHost(mpiHelper.h_recv_left));
-    CHECK(cudaFreeHost(mpiHelper.h_recv_right));
-    CHECK(cudaFreeHost(mpiHelper.h_send_left));
-    CHECK(cudaFreeHost(mpiHelper.h_send_right));
 
     MPI_Finalize();
 

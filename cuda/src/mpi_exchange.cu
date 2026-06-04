@@ -292,6 +292,33 @@ void setupMPIHelper(MPIHelper *mpiHelper, Config *conf) {
 }
 
 Cell *reduceSamples(Simulation *sim, MPIHelper *mpiHelper) {
-    return NULL;
+    // Each rank has samples for its local cells
+    // Reduce to rank 0 for output
+    // int world_size = mpiHelper->worldSize;
+
+    Cell *global_samples = NULL;
+    if (mpiHelper->worldRank == 0) {
+        global_samples = (Cell *)malloc(SAMPLES_SZ);
+        memset(global_samples, 0, SAMPLES_SZ);
+    }
+
+    // Each rank has samples for its local cells
+    // Reduce to rank 0 for output
+    MPI_Reduce(sim->samples, global_samples,
+                sizeof(Cell)/sizeof(float) * NX*NY*NZ,
+                MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    return global_samples;
 }
 
+void freeMPIHelper(MPIHelper *MPI) {
+    CHECK(cudaFree(mpiHelper.d_prefix_left));
+    CHECK(cudaFree(mpiHelper.d_prefix_right));
+    CHECK(cudaFree(mpiHelper.d_count));
+    CHECK(cudaFree(mpiHelper.d_send_left));
+    CHECK(cudaFree(mpiHelper.d_send_right));
+    CHECK(cudaFreeHost(mpiHelper.h_recv_left));
+    CHECK(cudaFreeHost(mpiHelper.h_recv_right));
+    CHECK(cudaFreeHost(mpiHelper.h_send_left));
+    CHECK(cudaFreeHost(mpiHelper.h_send_right));
+}
