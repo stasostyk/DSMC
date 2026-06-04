@@ -226,3 +226,68 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     // sim->NP = keep_n + recv_left_n + recv_right_n;
     sim->NP = sim->NP + recv_left_n + recv_right_n;
 }
+
+void setupMPIHelper(MPIHelper *mpiHelper, Config *conf) {
+    int world_rank, world_size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    // Assign one GPU per MPI rank
+    int num_gpus;
+    CHECK(cudaGetDeviceCount(&num_gpus));
+    CHECK(cudaSetDevice(world_rank % num_gpus));
+
+    MPIHelper mpiHelper;
+    mpiHelper->worldRank = world_rank;
+    mpiHelper->worldSize = world_size;
+    mpiHelper->numGpus = num_gpus;
+
+    printf("world rank: %d\n", world_rank);
+    printf("world size: %d\n", world_size);
+    printf("num gpus: %d\n", num_gpus);
+
+    mpiHelper->slabWidth = conf->Lx / (float)world_size;
+    mpiHelper->xMin = (float)world_rank * mpiHelper->slabWidth;
+    mpiHelper->xMax = mpiHelper->xMin + mpiHelper->slabWidth;
+
+    mpiHelper->left_rank = (world_rank > 0) ? world_rank - 1 : MPI_PROC_NULL;
+    mpiHelper->right_rank = (world_rank < world_size-1) ? world_rank + 1 : MPI_PROC_NULL;
+
+    cudaDeviceProp prop;
+    CHECK(cudaGetDeviceProperties(&prop, world_rank % num_gpus));
+    if (!prop.canMapHostMemory) {
+        fprintf(stderr, "Device does NOT support mapped host memory\n");
+        MPI_Finalize();
+        exit(1);
+    }
+
+    printf("slab width: %f\n", mpiHelper->slabWidth);
+    printf("xmin: %f\n", mpiHelper->xMin);
+    printf("xmax: %f\n", mpiHelper->xMax);
+
+    // Assume (because of the stream), potentially more particles going right
+    // Values got empirically
+    int particlesGoingRight = MAX_PARTICLES / 10;
+    int particlesGoingLeft = MAX_PARTICLES / 10;
+
+    mpiHelper->bufferToSendLeftCount = particlesGoingLeft;
+    mpiHelper->bufferToSendRightCount = particlesGoingRight;
+
+    CHECK(cudaMalloc(&mpiHelper->d_count,  2 * sizeof(int)));
+    CHECK(cudaMalloc(&mpiHelper->d_send_left, 6 * sizeof(float) * particlesGoingLeft));
+    CHECK(cudaMalloc(&mpiHelper->d_send_right, 6 * sizeof(float) * particlesGoingRight));
+    CHECK(cudaMalloc(&mpiHelper->d_prefix_right, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper->d_prefix_left, sizeof(int) * MAX_PARTICLES));
+
+    // Use pinned memory for faster D2H/H2D transfers
+    CHECK(cudaMallocHost(&mpiHelper->h_send_left,  particlesGoingLeft * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper->h_send_right, particlesGoingRight * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper->h_recv_left,  particlesGoingRight * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper->h_recv_right, particlesGoingLeft * 6 * sizeof(float)));
+
+    // Recv side: access is sequential in unpack_recv_kernel, so zero-copy is fine
+    cudaHostAlloc(&mpiHelper->h_recv_left,  particlesGoingRight * 6 * sizeof(float), cudaHostAllocMapped);
+    cudaHostAlloc(&mpiHelper->h_recv_right, particlesGoingLeft * 6 * sizeof(float), cudaHostAllocMapped);
+    cudaHostGetDevicePointer(&mpiHelper->d_recv_left_mapped,  mpiHelper->h_recv_left,  0);
+    cudaHostGetDevicePointer(&mpiHelper->d_recv_right_mapped, mpiHelper->h_recv_right, 0);
+}
