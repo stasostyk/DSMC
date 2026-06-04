@@ -301,18 +301,11 @@ void initialize_particles(Simulation *sim, MPIHelper *mpiHelper) {
 
 void apply_boundary_conditions_free_stream(Simulation *sim, MPIHelper *mpiHelper) {
     Config *conf = sim->conf;
-    // generate_particles_in_rect(sim, -(conf->DL), 0.0, 0.0, conf->Ly, 0.0, conf->Lz, 1);
-    // generate_particles_in_rect(sim, conf->Lx, conf->Lx + conf->DL, 0.0, conf->Ly, 0.0, conf->Lz, 1);
-    // generate_particles_in_rect(sim, 0.0, conf->Lx, -(conf->DL), 0.0, 0.0, conf->Lz, 1);
-    // generate_particles_in_rect(sim, 0.0, conf->Lx, conf->Ly, conf->Ly + conf->DL, 0.0, conf->Lz, 1);
-    // generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, -(conf->DL), 0.0, 1);
-    // generate_particles_in_rect(sim, 0.0, conf->Lx, 0.0, conf->Ly, conf->Lz, conf->Lz + conf->DL, 1);
-
     int worldRank = (mpiHelper == NULL) ? 0 : mpiHelper->worldRank;
     int worldSize = (mpiHelper == NULL) ? 1 : mpiHelper->worldSize;
 
     float xMin = (mpiHelper==NULL) ? 0.0f : mpiHelper->xMin;
-    float xMax = (mpiHelper==NULL) ? sim->conf->Lx : mpiHelper->xMax;
+    float xMax = (mpiHelper==NULL) ? conf->Lx : mpiHelper->xMax;
 
     // X faces: injects at physical boundaries
     if (worldRank == 0)

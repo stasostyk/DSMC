@@ -64,7 +64,7 @@ double rayleigh_device(double sigma, curandState *rngState) {
     double u = curand_uniform_double(rngState); // randu()
     return sigma * sqrt(-2.0 * log(u));
 }
- 
+
 __device__
 void diffuse_scattering_y_device(
     float *vx, float *vy, float *vz, double m, double T, double Ny, double KB,

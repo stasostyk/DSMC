@@ -5,13 +5,9 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CUDA_STANDARD 11)
 
 # Set GPU architectures
-#if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-#    set(CMAKE_CUDA_ARCHITECTURES "native")
-#endif()
-
-set(CMAKE_CUDA_ARCHITECTURES "70-real")  
-# --- MPI ---
-find_package(MPI REQUIRED)
+if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES "native")
+endif()
 
 set(SOURCES
     src/math_utils.cu 
