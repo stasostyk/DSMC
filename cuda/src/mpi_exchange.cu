@@ -117,6 +117,13 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     int left_n  = h_count[1];
     int right_n = h_count[2];
 
+    if (left_n > mpiHelper->bufferToSendLeftCount || right_n > mpiHelper->bufferToSendRightCount) {
+        fprintf(stderr, "Rank %d: exchange buffer overflow! left=%d right=%d bufLeft=%d\n bufRight=%d\n",
+                mpiHelper->worldRank, left_n, right_n, mpiHelper->bufferToSendLeftCount,
+                mpiHelper->bufferToSendRightCount);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
 
     scatter_send_kernel<<<grid, block>>>(
         sim->d_P, sim->NP,

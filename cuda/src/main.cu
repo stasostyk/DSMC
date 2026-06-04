@@ -116,6 +116,9 @@ int main(int argc, char **argv) {
     int particlesGoingRight = MAX_PARTICLES / 10;
     int particlesGoingLeft = MAX_PARTICLES / 100;
 
+    mpiHelper.bufferToSendLeftCount = particlesGoingLeft;
+    mpiHelper.bufferToSendRightCount = particlesGoingRight;
+
     CHECK(cudaMalloc(&mpiHelper.d_count,  3 * sizeof(int)));
     CHECK(cudaMalloc(&mpiHelper.d_send_left, 6 * sizeof(float) * particlesGoingLeft));
     CHECK(cudaMalloc(&mpiHelper.d_send_right, 6 * sizeof(float) * particlesGoingRight));
