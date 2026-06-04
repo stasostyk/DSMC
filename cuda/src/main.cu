@@ -112,9 +112,10 @@ int main(int argc, char **argv) {
 
     setup(&sim, &conf);
 
-    // Assume (because of the stream), most particles going right
-    int particlesGoingRight = MAX_PARTICLES / 10;
-    int particlesGoingLeft = MAX_PARTICLES / 100;
+    // Assume (because of the stream), more particles going right
+    // Values got empirically
+    int particlesGoingRight = MAX_PARTICLES / 5;
+    int particlesGoingLeft = MAX_PARTICLES / 5;
 
     mpiHelper.bufferToSendLeftCount = particlesGoingLeft;
     mpiHelper.bufferToSendRightCount = particlesGoingRight;
