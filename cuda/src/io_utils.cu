@@ -43,7 +43,7 @@ void write_averaged_macros(Simulation *sim, const char *filename, MPIHelper *mpi
     int world_rank = mpiHelper->worldRank;
 
     // Each rank owns NX_local cells in x, full NY and NZ
-    int NX_local = NX / world_size;  // cells this rank owns
+    // int NX_local = NX / world_size;  // cells this rank owns
     int local_cells = NX_local * NY * NZ;
     int local_sz = local_cells * sizeof(Cell);
 

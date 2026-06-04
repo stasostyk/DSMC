@@ -116,7 +116,7 @@ void collide_particles(Simulation *sim) {
     ntcs_work_queue_kernel<<<blocks, threadsPerBlock>>>(
         sim->d_totalCollisions, sim->d_P,
         sim->d_cellCount, sim->d_cellCountPrefixSum,
-        sim->rngStates, sim->d_sortedCells, NX*NY*NZ,
+        sim->rngStates, sim->d_sortedCells, NX_local*NY*NZ,
         sim->d_workQueueHead
     );
     CHECK_KERNELCALL();

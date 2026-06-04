@@ -53,6 +53,12 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    if (mpiHelper.worldSize != EXPECTED_GPU_COUNT) {
+        printf("world size should be equal to expected GPU count!\n");
+        MPI_Finalize();
+        return 0;
+    }
+
     printf("world rank: %d\n", world_rank);
     printf("world size: %d\n", world_size);
     printf("num gpus: %d\n", num_gpus);

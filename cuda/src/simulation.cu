@@ -87,7 +87,7 @@ void setup(Simulation *sim, Config *conf) {
         sim->temp_storage_bytes, 
         sim->d_cellCount, 
         sim->d_cellCountPrefixSum, 
-        NX*NY*NZ);
+        NX_local*NY*NZ);
     cudaMalloc(&sim->d_temp_storage, sim->temp_storage_bytes);
 
     // Also check for exclusive sum again
@@ -114,7 +114,7 @@ void setup(Simulation *sim, Config *conf) {
     cudaMemset(sim->d_totalCollisions, 0, sizeof(unsigned long long));
     cudaMemset(sim->d_samples, 0, SAMPLES_SZ);
 
-    sim->NP = NX * NY * NZ * conf->particlesPerCellTarget;
+    sim->NP = NX_local * NY * NZ * conf->particlesPerCellTarget;
 
     if (sim->NP > MAX_PARTICLES) {
         fprintf(stderr, "Too many particles for MAX_PARTICLES\n");
@@ -419,11 +419,11 @@ void filter_and_index_particles(Simulation *sim, MPIHelper *mpiHelper) {
     cub::DeviceScan::ExclusiveSum(
         sim->d_temp_storage, sim->temp_storage_bytes,
         sim->d_cellCount, sim->d_cellCountPrefixSum,
-        NX * NY * NZ
+        NX_local * NY * NZ
     );
 
     // SORT CELL COUNTS (FOR COLLISIONS)
-    int totalCells = NX * NY * NZ;
+    int totalCells = NX_local * NY * NZ;
 
     // Re-initialize keys 0..totalCells-1 each step since sort is destructive
     thrust::sequence(
@@ -453,7 +453,7 @@ void filter_and_index_particles(Simulation *sim, MPIHelper *mpiHelper) {
 
     // Copy prefix sum into a mutable "cursor" array (reuse d_particleIds as scratch)
     CHECK(cudaMemcpy(sim->d_cellCountPrefSumCopy, sim->d_cellCountPrefixSum,
-            sizeof(int) * NX * NY * NZ, cudaMemcpyDeviceToDevice));
+            sizeof(int) * NX_local * NY * NZ, cudaMemcpyDeviceToDevice));
 
     counting_sort_scatter_kernel<<<blocksNew, threadsPerBlock>>>(
         sim->d_new_P, sim->d_P,
@@ -617,7 +617,7 @@ __global__ void accumulate_sampling_kernel(
     int l = blockIdx.y * blockDim.y + threadIdx.y;
     int m = blockIdx.z * blockDim.z + threadIdx.z;
 
-    if (k >= NX || l >= NY || m >= NZ) return;
+    if (k >= NX_local || l >= NY || m >= NZ) return;
     
     int cellIdx = IDX_CELL(k-kOffset, l, m);
     int offset = cellCountPrefixSum[cellIdx];
@@ -645,7 +645,7 @@ void accumulate_sampling(Simulation *sim, MPIHelper *mpiHelper) {
 
     dim3 threadsPerBlock(4, 4, 4);
     dim3 blocksPerGrid(
-        (NX + threadsPerBlock.x - 1) / threadsPerBlock.x,
+        (NX_local + threadsPerBlock.x - 1) / threadsPerBlock.x,
         (NY + threadsPerBlock.y - 1) / threadsPerBlock.y,
         (NZ + threadsPerBlock.z - 1) / threadsPerBlock.z
     );

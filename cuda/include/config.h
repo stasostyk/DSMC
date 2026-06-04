@@ -7,13 +7,15 @@
 #define MAX_PARTICLES 30000000
 #define MAX_PARTICLES_PER_CELL 750
 #define NX 50
+#define EXPECTED_GPU_COUNT 2
+#define NX_local (NX / EXPECTED_GPU_COUNT)
 #define NY 50
 #define NZ 50
 
 #define PARTICLES_FIELD_SZ (MAX_PARTICLES * sizeof(float))
-#define SAMPLES_SZ (NX * NY * NZ * sizeof(Cell))
-#define CELL_COUNT_SZ (NX * NY * NZ * sizeof(int))
-#define CELL_LIST_SZ (NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int))
+#define SAMPLES_SZ (NX_local * NY * NZ * sizeof(Cell))
+#define CELL_COUNT_SZ (NX_local * NY * NZ * sizeof(int))
+// #define CELL_LIST_SZ (NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int))
 
 typedef struct {
     double KB;
