@@ -311,14 +311,14 @@ Cell *reduceSamples(Simulation *sim, MPIHelper *mpiHelper) {
     return global_samples;
 }
 
-void freeMPIHelper(MPIHelper *MPI) {
-    CHECK(cudaFree(mpiHelper.d_prefix_left));
-    CHECK(cudaFree(mpiHelper.d_prefix_right));
-    CHECK(cudaFree(mpiHelper.d_count));
-    CHECK(cudaFree(mpiHelper.d_send_left));
-    CHECK(cudaFree(mpiHelper.d_send_right));
-    CHECK(cudaFreeHost(mpiHelper.h_recv_left));
-    CHECK(cudaFreeHost(mpiHelper.h_recv_right));
-    CHECK(cudaFreeHost(mpiHelper.h_send_left));
-    CHECK(cudaFreeHost(mpiHelper.h_send_right));
+void freeMPIHelper(MPIHelper *mpiHelper) {
+    CHECK(cudaFree(mpiHelper->d_prefix_left));
+    CHECK(cudaFree(mpiHelper->d_prefix_right));
+    CHECK(cudaFree(mpiHelper->d_count));
+    CHECK(cudaFree(mpiHelper->d_send_left));
+    CHECK(cudaFree(mpiHelper->d_send_right));
+    CHECK(cudaFreeHost(mpiHelper->h_recv_left));
+    CHECK(cudaFreeHost(mpiHelper->h_recv_right));
+    CHECK(cudaFreeHost(mpiHelper->h_send_left));
+    CHECK(cudaFreeHost(mpiHelper->h_send_right));
 }

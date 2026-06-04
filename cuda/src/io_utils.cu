@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <cuda_runtime.h>
-#include "../../cuda_utils.h"
+#include "../include/cuda_utils.h"
 #include "../include/io_utils.h"
 #include "../include/simulation.h"
 #include "../include/mpi_helper.h"
