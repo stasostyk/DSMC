@@ -107,30 +107,21 @@ int main(int argc, char **argv) {
     int divFactor = 1; // empirically works (we want to save memory)
     int smallerParticleSize = MAX_PARTICLES / divFactor;
     CHECK(cudaMalloc(&mpiHelper.d_count,  3 * sizeof(int)));
+    CHECK(cudaMalloc(&mpiHelper.d_send_left, 6 * sizeof(float) * smallerParticleSize));
+    CHECK(cudaMalloc(&mpiHelper.d_send_right, 6 * sizeof(float) * smallerParticleSize));
     CHECK(cudaMalloc(&mpiHelper.d_recv_left, 6 * sizeof(float) * smallerParticleSize));
     CHECK(cudaMalloc(&mpiHelper.d_recv_right, 6 * sizeof(float) * smallerParticleSize));
     CHECK(cudaMalloc(&mpiHelper.d_flag, sizeof(int) * MAX_PARTICLES));
-    CHECK(cudaMalloc(&mpiHelper.d_is_left, sizeof(int) * MAX_PARTICLES));
-    CHECK(cudaMalloc(&mpiHelper.d_is_keep, sizeof(int) * MAX_PARTICLES));
-    CHECK(cudaMalloc(&mpiHelper.d_is_right, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_prefix_keep, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_prefix_right, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_prefix_left, sizeof(int) * MAX_PARTICLES));
 
-
     // Use pinned memory for faster D2H/H2D transfers
-    // cudaMallocHost(&mpiHelper.h_send_left,  smallerParticleSize * 6 * sizeof(float));
-    // cudaMallocHost(&mpiHelper.h_send_right, smallerParticleSize * 6 * sizeof(float));
-    cudaMallocHost(&mpiHelper.h_recv_left,  smallerParticleSize * 6 * sizeof(float));
-    cudaMallocHost(&mpiHelper.h_recv_right, smallerParticleSize * 6 * sizeof(float));
+    CHECK(cudaMallocHost(&mpiHelper.h_send_left,  smallerParticleSize * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper.h_send_right, smallerParticleSize * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper.h_recv_left,  smallerParticleSize * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper.h_recv_right, smallerParticleSize * 6 * sizeof(float)));
 
-    cudaHostRegister(mpiHelper.h_send_left,  smallerParticleSize * 6 * sizeof(float), cudaHostRegisterMapped);
-    cudaHostRegister(mpiHelper.h_send_right, smallerParticleSize * 6 * sizeof(float), cudaHostRegisterMapped);
-
-    // Get device-side pointers to the pinned buffers
-    cudaHostGetDevicePointer(&mpiHelper.d_send_left_mapped,  mpiHelper.h_send_left,  0);
-    cudaHostGetDevicePointer(&mpiHelper.d_send_right_mapped, mpiHelper.h_send_right, 0);
-    
     initialize_particles(&sim, &mpiHelper);
 
     timer_end(&t);
@@ -173,13 +164,18 @@ int main(int argc, char **argv) {
     timer_print(&allProgramTimer, "ALL PROGRAM FINISHED");
 
     CHECK(cudaFree(mpiHelper.d_flag));
-    CHECK(cudaFree(mpiHelper.d_is_keep));
-    CHECK(cudaFree(mpiHelper.d_is_left));
-    CHECK(cudaFree(mpiHelper.d_is_right));
     CHECK(cudaFree(mpiHelper.d_prefix_keep));
     CHECK(cudaFree(mpiHelper.d_prefix_left));
     CHECK(cudaFree(mpiHelper.d_prefix_right));
     CHECK(cudaFree(mpiHelper.d_count));
+    CHECK(cudaFree(mpiHelper.d_send_left));
+    CHECK(cudaFree(mpiHelper.d_send_right));
+    CHECK(cudaFree(mpiHelper.d_recv_left));
+    CHECK(cudaFree(mpiHelper.d_recv_right));
+    CHECK(cudaFreeHost(mpiHelper.h_recv_left));
+    CHECK(cudaFreeHost(mpiHelper.h_recv_right));
+    CHECK(cudaFreeHost(mpiHelper.h_send_left));
+    CHECK(cudaFreeHost(mpiHelper.h_send_right));
 
     MPI_Finalize();
 
