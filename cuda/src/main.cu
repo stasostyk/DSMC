@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
     // CHECK(cudaMalloc(&mpiHelper.d_recv_left, 6 * sizeof(float) * smallerParticleSize));
     // CHECK(cudaMalloc(&mpiHelper.d_recv_right, 6 * sizeof(float) * smallerParticleSize));
     // CHECK(cudaMalloc(&mpiHelper.d_flag, sizeof(int) * MAX_PARTICLES));
-    CHECK(cudaMalloc(&mpiHelper.d_prefix_keep, sizeof(int) * MAX_PARTICLES));
+    // CHECK(cudaMalloc(&mpiHelper.d_prefix_keep, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_prefix_right, sizeof(int) * MAX_PARTICLES));
     CHECK(cudaMalloc(&mpiHelper.d_prefix_left, sizeof(int) * MAX_PARTICLES));
 
@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
     timer_print(&allProgramTimer, "ALL PROGRAM FINISHED");
 
     // CHECK(cudaFree(mpiHelper.d_flag));
-    CHECK(cudaFree(mpiHelper.d_prefix_keep));
+    // CHECK(cudaFree(mpiHelper.d_prefix_keep));
     CHECK(cudaFree(mpiHelper.d_prefix_left));
     CHECK(cudaFree(mpiHelper.d_prefix_right));
     CHECK(cudaFree(mpiHelper.d_count));
