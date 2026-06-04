@@ -119,8 +119,8 @@ int main(int argc, char **argv) {
 
 
     // Use pinned memory for faster D2H/H2D transfers
-    cudaMallocHost(&mpiHelper.h_send_left,  smallerParticleSize * 6 * sizeof(float));
-    cudaMallocHost(&mpiHelper.h_send_right, smallerParticleSize * 6 * sizeof(float));
+    // cudaMallocHost(&mpiHelper.h_send_left,  smallerParticleSize * 6 * sizeof(float));
+    // cudaMallocHost(&mpiHelper.h_send_right, smallerParticleSize * 6 * sizeof(float));
     cudaMallocHost(&mpiHelper.h_recv_left,  smallerParticleSize * 6 * sizeof(float));
     cudaMallocHost(&mpiHelper.h_recv_right, smallerParticleSize * 6 * sizeof(float));
 
