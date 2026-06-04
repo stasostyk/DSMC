@@ -166,7 +166,7 @@ int main(int argc, char **argv) {
 
     print_global_diagnostics(&sim, conf.nSteps);
     write_averaged_macros(&sim, "fields_avg.dat", &mpiHelper);
-    write_paraview_files(&sim, conf.nSteps);
+    // write_paraview_files(&sim, conf.nSteps);
 
     clearPointers(&sim);
 
