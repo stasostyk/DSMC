@@ -9,8 +9,14 @@
 #include "../include/io_utils.h"
 #include "../include/timer.h"
 #include "../include/cuda_utils.h"
+#include "../include/mpi_helper.h"
+#include "../include/mpi_exchange.h"
+
+#include <mpi.h>
 
 int main(int argc, char **argv) {
+    MPI_Init(&argc, &argv);
+    
     if (argc < 2) {
         printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".\n");
         return 0;
@@ -37,10 +43,19 @@ int main(int argc, char **argv) {
 
     Simulation sim;
     Config conf;
+    MPIHelper mpiHelper;
 
     config_setup(&conf, object_case);
+    setupMPIHelper(&mpiHelper, &conf);
     setup(&sim, &conf);
-    initialize_particles(&sim, NULL);
+
+    if (NX % mpiHelper.worldSize != 0) {
+        printf("NX SHOULD DIVIDE BY MPI NODE COUNT!\n");
+        MPI_Finalize();
+        return 1;
+    }
+
+    initialize_particles(&sim, &mpiHelper);
 
     timer_end(&t);
     timer_print(&t, "INITIALIZATION");
@@ -48,8 +63,11 @@ int main(int argc, char **argv) {
 
     for (int step = 0; step < conf.nSteps; step++) {
         move_particles(&sim);
-        apply_boundary_conditions_free_stream(&sim, NULL);
-        filter_and_index_particles(&sim, false);
+        apply_boundary_conditions_free_stream(&sim, &mpiHelper);
+
+        exchange_boundary_particles(&sim, &mpiHelper);
+
+        filter_and_index_particles(&sim, true);
         
         collide_particles_hss(&sim);
         collide_particles(&sim);
@@ -69,14 +87,21 @@ int main(int argc, char **argv) {
 
     move_neccessary_data_before_printing(&sim);
 
-    print_global_diagnostics(&sim, conf.nSteps);
-    write_averaged_macros(&sim, "fields_avg.dat", sim.samples);
-    write_paraview_files(&sim, conf.nSteps);
+    Cell *global_samples = reduceSamples(&sim, &mpiHelper);
+
+    if (mpiHelper.worldRank == 0) {
+        print_global_diagnostics(&sim, conf.nSteps);
+        write_averaged_macros(&sim, "fields_avg.dat", global_samples);
+        if (global_samples != NULL) free(global_samples);
+        // write_paraview_files(&sim, conf.nSteps);
+    }
 
     clearPointers(&sim);
 
     timer_end(&allProgramTimer);
     timer_print(&allProgramTimer, "ALL PROGRAM FINISHED");
+
+    MPI_Finalize();
 
     return 0;
 }
