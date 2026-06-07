@@ -44,8 +44,8 @@ typedef struct {
     int wingCnt;
     Wing wings[3]; // max 3 wings, but can be changed
 
-    int ballCnt;
-    Ball balls[3]; // max 3 balls, but can be changed
+    int sphereCnt;
+    Sphere spheres[3]; // max 3 spheres, but can be changed
 
     // VHS model
     double omega;

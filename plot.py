@@ -24,9 +24,9 @@ wing_x2 = 0.5
 wing_y = 0.5
 wing_thickness = 0.02
 
-ball_cx = 0.6
-ball_cy = 0.6
-ball_radius = 0.15
+sphere_cx = 0.6
+sphere_cy = 0.6
+sphere_radius = 0.15
 
 levels = 20
 stream_density = 1.0
@@ -122,12 +122,12 @@ def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label, z_slice):
             edgecolor="white"
         )
         ax.add_patch(wing)
-    elif boundary_case == 'ball':
-        ball = Circle((ball_cx, ball_cy), calc_new_radius(ball_radius, delta_z),
+    elif boundary_case == 'sphere':
+        sphere = Circle((sphere_cx, sphere_cy), calc_new_radius(sphere_radius, delta_z),
                       facecolor="white",
                       edgecolor="white"
                       )
-        ax.add_patch(ball)
+        ax.add_patch(sphere)
     else:
         wing = Rectangle(
             (wing_x1, wing_y - wing_thickness / 2.0),
@@ -138,17 +138,17 @@ def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label, z_slice):
         )
         ax.add_patch(wing)
         
-        ball = Circle((0.2, 0.2), calc_new_radius(0.1, delta_z),
+        sphere = Circle((0.2, 0.2), calc_new_radius(0.1, delta_z),
                       facecolor="white",
                       edgecolor="white"
                       )
-        ax.add_patch(ball)
+        ax.add_patch(sphere)
         
-        ball = Circle((0.8, 0.25), calc_new_radius(0.2, delta_z),
+        sphere = Circle((0.8, 0.25), calc_new_radius(0.2, delta_z),
                       facecolor="white",
                       edgecolor="white"
                       )
-        ax.add_patch(ball)
+        ax.add_patch(sphere)
 
     ax.set_title(title)
     ax.set_aspect("equal")
@@ -157,12 +157,12 @@ def plot_field(boundary_case, ax, x, y, S, U, V, title, cbar_label, z_slice):
 
 def main():
     if len(sys.argv) < 3:
-        print(f'Usage: {sys.argv[0]} [select case: ball/wing] [input .dat file] [z_val = 0.5 (optional)] [output .png file (optional)]')
+        print(f'Usage: {sys.argv[0]} [select case: sphere/wing] [input .dat file] [z_val = 0.5 (optional)] [output .png file (optional)]')
         exit(0)
 
     boundary_case = sys.argv[1]
-    if boundary_case != 'ball' and boundary_case != 'wing' and boundary_case != 'combo':
-        print(f'Boundary case must be either "ball" or "wing" or "combo", but was {boundary_case}')
+    if boundary_case != 'sphere' and boundary_case != 'wing' and boundary_case != 'combo':
+        print(f'Boundary case must be either "sphere" or "wing" or "combo", but was {boundary_case}')
         exit(0)
 
     input_filename = sys.argv[2]

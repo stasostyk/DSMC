@@ -21,8 +21,8 @@ int main(void) {
 
     #ifdef WING_CASE
         printf("Running Wing case.\n");
-    #elif defined(BALL_CASE)
-        printf("Running Ball case.\n");
+    #elif defined(SPHERE_CASE)
+        printf("Running Sphere case.\n");
     #else
         print("No case selected. Aborting.\n");
         return 0;

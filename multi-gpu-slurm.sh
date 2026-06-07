@@ -32,8 +32,8 @@ nvidia-smi --query-gpu=index,memory.used,memory.total \
 MONITOR_PID=$!
 
 #srun --ntasks=1 nvidia-smi
-#  srun nsys profile --trace=cuda --stats=true --output="$HOME/nsys-out" ./DSMC BALL
-srun ./DSMC_mpi BALL
+#  srun nsys profile --trace=cuda --stats=true --output="$HOME/nsys-out" ./DSMC SPHERE
+srun ./DSMC_mpi SPHERE
 
 #srun --ntasks=2 --gpus-per-task=1 \
     #bash -c 'if [ $SLURM_PROCID -eq 0 ]; then
@@ -41,9 +41,9 @@ srun ./DSMC_mpi BALL
             #--output=$SLURM_SUBMIT_DIR/logs/profile_rank0 \
             #--trace=cuda,mpi \
             #--force-overwrite=true \
-            #./DSMC BALL
+            #./DSMC SPHERE
     #else
-        #./DSMC BALL
+        #./DSMC SPHERE
     #fi'
 
 # After srun, copy the scratch files if nsys still fails to write directly

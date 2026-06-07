@@ -40,12 +40,12 @@ typedef struct {
         double PFree;
         double TFree;
         double angleOfAttack;
-    #elif defined(BALL_CASE)
-        // ball 
-        double ballCenterX;
-        double ballCenterY;
-        double ballCenterZ;
-        double ballRadius;
+    #elif defined(SPHERE_CASE)
+        // sphere 
+        double sphereCenterX;
+        double sphereCenterY;
+        double sphereCenterZ;
+        double sphereRadius;
         double Tb;
 
         // stream

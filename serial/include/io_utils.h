@@ -9,8 +9,8 @@ void write_vti(Simulation *sim, Config *conf, const char *filename);
 
 #ifdef WING_CASE
 void write_wing_vtp(Config *conf, const char *filename);
-#elif defined(BALL_CASE)
-void write_ball_vtp(Config *conf, const char *filename);
+#elif defined(SPHERE_CASE)
+void write_sphere_vtp(Config *conf, const char *filename);
 #endif
 
 void write_paraview_files(Simulation *sim, Config *conf, unsigned int step);

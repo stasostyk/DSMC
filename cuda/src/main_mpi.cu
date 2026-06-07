@@ -17,19 +17,19 @@ int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
     
     if (argc < 2) {
-        printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".\n");
+        printf("Usage: ./DSMC [case], where case is \"SPHERE\" or \"WING\".\n");
         return 0;
     }
 
     int object_case;
-    if (strcmp("BALL", argv[1]) == 0) {
+    if (strcmp("SPHERE", argv[1]) == 0) {
         object_case = 0; 
     } else if (strcmp("WING", argv[1]) == 0) {
         object_case = 1;
     } else if (strcmp("COMBO", argv[1]) == 0) {
         object_case = 2;
     } else {
-        printf("Usage: ./DSMC [case], where case is \"BALL\" or \"WING\".\n");
+        printf("Usage: ./DSMC [case], where case is \"SPHERE\" or \"WING\".\n");
         printf("given case: %s", argv[1]);
         return 0;
     }

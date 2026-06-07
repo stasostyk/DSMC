@@ -27,13 +27,13 @@ cd build
 cmake .. -DCMAKE_CUDA_ARCHITECTURES=70
 cmake --build . --parallel "$SLURM_CPUS_PER_TASK"
 
-PROFILE_BASE="${TMPDIR:-/tmp}/dsmc_ball_${SLURM_JOB_ID}"
+PROFILE_BASE="${TMPDIR:-/tmp}/dsmc_sphere_${SLURM_JOB_ID}"
 
 nsys profile \
   --stats=true \
   --force-overwrite=true \
   --output="$PROFILE_BASE" \
-  ./DSMC_single_gpu BALL
+  ./DSMC_single_gpu SPHERE
 
 cp ./*.dat "$SLURM_SUBMIT_DIR"/
 

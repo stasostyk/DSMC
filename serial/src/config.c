@@ -34,13 +34,13 @@ void config_setup(Config *config) {
         config->PFree = 0.1; // Free stream pressure (Pa)
         config->TFree = 200.0; // Free stream temperature (K)
         config->angleOfAttack = 30.0; // Angle of attack (degrees)
-    #elif defined(BALL_CASE)
-        // ball 
-        config->ballCenterX = 0.6; // in m
-        config->ballCenterY = 0.6; // in m
-        config->ballCenterZ = 0.5; // in m
-        config->ballRadius = 0.15; // in m
-        config->Tb = 300.0; // Temperature of the ball surface (K)
+    #elif defined(SPHERE_CASE)
+        // sphere 
+        config->sphereCenterX = 0.6; // in m
+        config->sphereCenterY = 0.6; // in m
+        config->sphereCenterZ = 0.5; // in m
+        config->sphereRadius = 0.15; // in m
+        config->Tb = 300.0; // Temperature of the sphere surface (K)
 
         // stream
         config->MaFree = 4.0; // Free stream Mach number

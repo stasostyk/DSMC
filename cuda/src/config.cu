@@ -11,37 +11,37 @@ void setup_wing(Wing *wing) {
     wing->Tw = 300.0; // Temperature of the wing surface (K)
 }
 
-void setup_ball(Ball *ball) {
-    ball->ballCenterX = 0.6; // in m
-    ball->ballCenterY = 0.6; // in m
-    ball->ballCenterZ = 0.5; // in m
-    ball->ballRadius = 0.15; // in m
-    ball->Tb = 300.0; // Temperature of the ball surface (K)
+void setup_sphere(Sphere *sphere) {
+    sphere->sphereCenterX = 0.6; // in m
+    sphere->sphereCenterY = 0.6; // in m
+    sphere->sphereCenterZ = 0.5; // in m
+    sphere->sphereRadius = 0.15; // in m
+    sphere->Tb = 300.0; // Temperature of the sphere surface (K)
 
     // derived
-    ball->ballRadiusSquared = ball->ballRadius * ball->ballRadius;
+    sphere->sphereRadiusSquared = sphere->sphereRadius * sphere->sphereRadius;
 }
 
-void setup_ball2(Ball *ball) {
-    ball->ballCenterX = 0.2; // in m
-    ball->ballCenterY = 0.2; // in m
-    ball->ballCenterZ = 0.5; // in m
-    ball->ballRadius = 0.1; // in m
-    ball->Tb = 300.0; // Temperature of the ball surface (K)
+void setup_sphere2(Sphere *sphere) {
+    sphere->sphereCenterX = 0.2; // in m
+    sphere->sphereCenterY = 0.2; // in m
+    sphere->sphereCenterZ = 0.5; // in m
+    sphere->sphereRadius = 0.1; // in m
+    sphere->Tb = 300.0; // Temperature of the sphere surface (K)
 
     // derived
-    ball->ballRadiusSquared = ball->ballRadius * ball->ballRadius;
+    sphere->sphereRadiusSquared = sphere->sphereRadius * sphere->sphereRadius;
 }
 
-void setup_ball3(Ball *ball) {
-    ball->ballCenterX = 0.8; // in m
-    ball->ballCenterY = 0.25; // in m
-    ball->ballCenterZ = 0.5; // in m
-    ball->ballRadius = 0.2; // in m
-    ball->Tb = 300.0; // Temperature of the ball surface (K)
+void setup_sphere3(Sphere *sphere) {
+    sphere->sphereCenterX = 0.8; // in m
+    sphere->sphereCenterY = 0.25; // in m
+    sphere->sphereCenterZ = 0.5; // in m
+    sphere->sphereRadius = 0.2; // in m
+    sphere->Tb = 300.0; // Temperature of the sphere surface (K)
 
     // derived
-    ball->ballRadiusSquared = ball->ballRadius * ball->ballRadius;
+    sphere->sphereRadiusSquared = sphere->sphereRadius * sphere->sphereRadius;
 }
 
 void config_setup(Config *config, int object_case) {
@@ -72,15 +72,15 @@ void config_setup(Config *config, int object_case) {
     config->angleOfAttack = 0.0; // Angle of attack (degrees)
 
     if (object_case == 0) {
-        // Ball case
+        // Sphere case
         config->wingCnt = 0;
-        config->ballCnt = 1;
+        config->sphereCnt = 1;
 
-        setup_ball(&(config->balls[0]));
+        setup_sphere(&(config->spheres[0]));
     } else if (object_case == 1) {
         // Wing case
         config->wingCnt = 1;
-        config->ballCnt = 0;
+        config->sphereCnt = 0;
 
         setup_wing(&(config->wings[0]));
         
@@ -88,11 +88,11 @@ void config_setup(Config *config, int object_case) {
     } else if (object_case == 2) {
         // COMBO
         config->wingCnt = 1;
-        config->ballCnt = 2;
+        config->sphereCnt = 2;
 
         setup_wing(&(config->wings[0]));
-        setup_ball2(&(config->balls[0]));
-        setup_ball3(&(config->balls[1]));
+        setup_sphere2(&(config->spheres[0]));
+        setup_sphere3(&(config->spheres[1]));
         
         config->angleOfAttack = 30.0; // Angle of attack (degrees)
     }
@@ -136,7 +136,7 @@ void config_setup(Config *config, int object_case) {
     config->ntcs_collisionProbMultiplierSquared = config->ntcs_collisionProbMultiplier * config->ntcs_collisionProbMultiplier;
 
     config->hss_nbatch = 3;
-    config->hss_threshold = 600.0; // threshold for switching to HSS, in number of particles per cell
+    config->hss_threshold = 300.0; // threshold for switching to HSS, in number of particles per cell
     config->hss_collisionProbMultiplierSquared = config->weight
         * config->sigmaRef
         * pow(config->CrRef, config->ntcs_collisionProbExponent)

@@ -227,11 +227,11 @@ void write_wing_vtp(Simulation *sim, const char *filename) {
 }
 #endif
 
-#ifdef BALL_CASE
-void write_ball_vtp(Simulation *sim, const char *filename) {
+#ifdef SPHERE_CASE
+void write_sphere_vtp(Simulation *sim, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
-        fprintf(stderr, "Could not open ball output file\n");
+        fprintf(stderr, "Could not open sphere output file\n");
         exit(1);
     }
 
@@ -258,9 +258,9 @@ void write_ball_vtp(Simulation *sim, const char *filename) {
         for (int j = 0; j <= n_phi; j++) {
             double phi = 2.0 * M_PI * j / n_phi; // 0 -> 2pi
 
-            double x = sim->conf->ballCenterX + sim->conf->ballRadius * sin(theta) * cos(phi);
-            double y = sim->conf->ballCenterY + sim->conf->ballRadius * sin(theta) * sin(phi);
-            double z = sim->conf->ballCenterZ + sim->conf->ballRadius * cos(theta);
+            double x = sim->conf->sphereCenterX + sim->conf->sphereRadius * sin(theta) * cos(phi);
+            double y = sim->conf->sphereCenterY + sim->conf->sphereRadius * sin(theta) * sin(phi);
+            double z = sim->conf->sphereCenterZ + sim->conf->sphereRadius * cos(theta);
 
             fprintf(fp, "%e %e %e\n", x, y, z);
         }
@@ -323,9 +323,9 @@ void write_paraview_files(Simulation *sim, unsigned int step) {
         char wing_fname[64];
         sprintf(wing_fname, "paraview_wing_%05d.vtp", step);
         write_wing_vtp(sim, wing_fname);
-    #elif defined(BALL_CASE)
-        char ball_fname[64];
-        sprintf(ball_fname, "paraview_ball_%05d.vtp", step);
-        write_ball_vtp(sim, ball_fname);
+    #elif defined(SPHERE_CASE)
+        char sphere_fname[64];
+        sprintf(sphere_fname, "paraview_sphere_%05d.vtp", step);
+        write_sphere_vtp(sim, sphere_fname);
     #endif
 }
