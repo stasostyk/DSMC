@@ -1,7 +1,7 @@
 # DSMC Particle Simulator
 
 
-![Plot](out.png)
+![Plot](vis.png)
 
 This project is a 3D CUDA-accelerated implementation of Direct Simulation Monte Carlo (DSMC), which is a stochastic solution of the Boltzmann equation for rarefied gases. These gases are common in supersonic and hypersonic flows where a Knudsen number larger than 1, where Navier Stokes equations have proven to be inaccurate. For example, it is used in aerodynamics to model Space Shuttle re-entry into the atmosphere. 
 
