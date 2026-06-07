@@ -61,7 +61,7 @@ void config_setup(Config *config, int object_case) {
     config->dt = 1.0e-5;
     config->nSteps = 2000;
     config->printPeriod = 0;
-    config->particlesPerCellTarget = 100;
+    config->particlesPerCellTarget = 10;
     config->firstSampleStep = 1000;
     config->samplingPeriod = 10;
 

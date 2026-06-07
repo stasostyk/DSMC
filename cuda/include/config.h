@@ -4,8 +4,8 @@
 #include "object.h"
 #include <cuda_runtime.h>
 
-#define MAX_PARTICLES 30000000
-#define MAX_PARTICLES_PER_CELL 750
+#define MAX_PARTICLES 20000000
+#define MAX_PARTICLES_PER_CELL 250
 #define NX 50
 #define NY 50
 #define NZ 50
