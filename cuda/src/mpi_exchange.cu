@@ -29,7 +29,7 @@ __global__ void classify_particles_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (i < NP) {
-        float x = P.x[i];
+        float x = P.pos[IDX_PARTICLE(i,0)];
         int flag;
 
         if (x < x_lo) 
@@ -64,14 +64,20 @@ __global__ void scatter_send_kernel(
 
     if (flag == 1) {
         int j = d_prefix_left[i] * 6;  // prefix of send_left flags
-        send_left[j+0] = P.x[i];  send_left[j+1] = P.y[i];
-        send_left[j+2] = P.z[i];  send_left[j+3] = P.vx[i];
-        send_left[j+4] = P.vy[i]; send_left[j+5] = P.vz[i];
+        send_left[j+0] = P.pos[IDX_PARTICLE(i,0)];
+        send_left[j+1] = P.pos[IDX_PARTICLE(i,1)];
+        send_left[j+2] = P.pos[IDX_PARTICLE(i,2)];
+        send_left[j+3] = P.vel[IDX_PARTICLE(i,0)];
+        send_left[j+4] = P.vel[IDX_PARTICLE(i,1)];
+        send_left[j+5] = P.vel[IDX_PARTICLE(i,2)];
     } else if (flag == 2) {
         int j = d_prefix_right[i] * 6;  // prefix of send_right flags
-        send_right[j+0] = P.x[i];  send_right[j+1] = P.y[i];
-        send_right[j+2] = P.z[i];  send_right[j+3] = P.vx[i];
-        send_right[j+4] = P.vy[i]; send_right[j+5] = P.vz[i];
+        send_right[j+0] = P.pos[IDX_PARTICLE(i,0)];
+        send_right[j+1] = P.pos[IDX_PARTICLE(i,1)];
+        send_right[j+2] = P.pos[IDX_PARTICLE(i,2)];
+        send_right[j+3] = P.vel[IDX_PARTICLE(i,0)];
+        send_right[j+4] = P.vel[IDX_PARTICLE(i,1)];
+        send_right[j+5] = P.vel[IDX_PARTICLE(i,2)];
     } 
 }
 
@@ -83,9 +89,12 @@ __global__ void unpack_recv_kernel(
     if (i >= recv_n) return;
 
     int j = offset + i;
-    P.x[j]  = recv_buf[i*6+0]; P.y[j]  = recv_buf[i*6+1];
-    P.z[j]  = recv_buf[i*6+2]; P.vx[j] = recv_buf[i*6+3];
-    P.vy[j] = recv_buf[i*6+4]; P.vz[j] = recv_buf[i*6+5];
+    P.pos[IDX_PARTICLE(j,0)]  = recv_buf[i*6+0];
+    P.pos[IDX_PARTICLE(j,1)]  = recv_buf[i*6+1];
+    P.pos[IDX_PARTICLE(j,2)]  = recv_buf[i*6+2];
+    P.vel[IDX_PARTICLE(j,0)] = recv_buf[i*6+3];
+    P.vel[IDX_PARTICLE(j,1)] = recv_buf[i*6+4];
+    P.vel[IDX_PARTICLE(j,2)] = recv_buf[i*6+5];
 }
 
 __global__ void set_valid_kernel(int *d_valid, int offset, int count) {

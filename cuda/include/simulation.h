@@ -10,6 +10,7 @@
 
 #define IDX_CELL(k, l, m) ((k)*NY*NZ + (l)*NZ + (m))
 #define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + (q))
+#define IDX_PARTICLE(i, j) (i * 3 + j)
 
 typedef struct {
     // for using randomness in GPU
@@ -40,8 +41,8 @@ typedef struct {
     int *d_cellKeys;
     int *d_cellCountPrefSumCopy;
 
-    int *d_sortedCells;     // indices 0..NX*NY*NZ-1 sorted by descending cellCount
-    int *d_cellCountSorted; // scratch — counts reordered alongside keys
+    int *d_sortedCells;     // indices 0...NX*NY*NZ-1 sorted by descending cellCount
+    int *d_cellCountSorted; // scratch, counts reordered alongside keys
 
     unsigned int *d_workQueueHead;
 

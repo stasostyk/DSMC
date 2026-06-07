@@ -54,13 +54,13 @@ __global__ void ntcs_work_queue_kernel(
             int i = i_local + offset;
             int j = j_local + offset;
 
-            float vx_i = P.vx[i];
-            float vy_i = P.vy[i];
-            float vz_i = P.vz[i];
+            float vx_i = P.vel[IDX_PARTICLE(i, 0)];
+            float vy_i = P.vel[IDX_PARTICLE(i, 1)];
+            float vz_i = P.vel[IDX_PARTICLE(i, 2)];
 
-            float vx_j = P.vx[j];
-            float vy_j = P.vy[j];
-            float vz_j = P.vz[j];
+            float vx_j = P.vel[IDX_PARTICLE(j, 0)];
+            float vy_j = P.vel[IDX_PARTICLE(j, 1)];
+            float vz_j = P.vel[IDX_PARTICLE(j, 2)];
 
             float dvx = vx_j - vx_i;
             float dvy = vy_j - vy_i;
@@ -78,12 +78,12 @@ __global__ void ntcs_work_queue_kernel(
                 relativeSpeed *= 0.5f;
                 float VC[3] = { 0.5f * ( vx_j + vx_i ), 0.5f * ( vy_j + vy_i ), 0.5f * ( vz_j + vz_i ) };
                 float VCr[3] = { relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2] };
-                P.vx[i] = VC[0] + VCr[0];
-                P.vy[i] = VC[1] + VCr[1];
-                P.vz[i] = VC[2] + VCr[2];
-                P.vx[j] = VC[0] - VCr[0];
-                P.vy[j] = VC[1] - VCr[1];
-                P.vz[j] = VC[2] - VCr[2];
+                P.vel[IDX_PARTICLE(i, 0)] = VC[0] + VCr[0];
+                P.vel[IDX_PARTICLE(i, 1)] = VC[1] + VCr[1];
+                P.vel[IDX_PARTICLE(i, 2)] = VC[2] + VCr[2];
+                P.vel[IDX_PARTICLE(j, 0)] = VC[0] - VCr[0];
+                P.vel[IDX_PARTICLE(j, 1)] = VC[1] - VCr[1];
+                P.vel[IDX_PARTICLE(j, 2)] = VC[2] - VCr[2];
 
                 collisions++;
             }

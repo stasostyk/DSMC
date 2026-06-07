@@ -2,8 +2,8 @@
 #define DSMC_PARTICLES_H
 
 typedef struct {
-    float *x, *y, *z;
-    float *vx, *vy, *vz;
+    float *pos;
+    float *vel;
 } Particles;
 
 #endif // DSMC_PARTICLES_H

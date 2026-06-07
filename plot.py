@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Circle
 import sys
+import matplotlib
+matplotlib.use('Agg')
 
 
 # columns for file format: x y z? n ux uy uz T avg_count
