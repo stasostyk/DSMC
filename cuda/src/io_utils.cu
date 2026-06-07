@@ -1,31 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <cuda_runtime.h>
-#include "../include/cuda_utils.h"
 #include "../include/io_utils.h"
 #include "../include/simulation.h"
-#include "../include/mpi_helper.h"
-
-void move_neccessary_data_before_printing(Simulation *sim) {
-    // Particle data is mostly stored in and dealt in GPU, 
-    // to have the newest version in CPU, it needs to be copied.
-   
-    CHECK(cudaMemcpy(&sim->totalCollisions, sim->d_totalCollisions, sizeof(unsigned long long), cudaMemcpyDeviceToHost))
-
-    CHECK(cudaMemcpy(sim->P.pos, sim->d_P.pos, sim->NP * sizeof(float) * 3, cudaMemcpyDeviceToHost));
-    CHECK(cudaMemcpy(sim->P.vel, sim->d_P.vel, sim->NP * sizeof(float) * 3, cudaMemcpyDeviceToHost));
-
-    CHECK(cudaMemcpy(sim->samples, sim->d_samples, SAMPLES_SZ, cudaMemcpyDeviceToHost));
-} 
 
 void print_global_diagnostics(Simulation *sim, int step) {
     double sumVx = 0.0, sumVy = 0.0, sumVz = 0.0;
 
     for (int i = 0; i < sim->NP; i++) {
-        sumVx += sim->P.vel[IDX_PARTICLE(i, 0)];
-        sumVy += sim->P.vel[IDX_PARTICLE(i, 1)];
-        sumVz += sim->P.vel[IDX_PARTICLE(i, 2)];
+        sumVx += sim->P.vx[i];
+        sumVy += sim->P.vy[i];
+        sumVz += sim->P.vz[i];
     }
 
     double ux = sumVx / sim->NP;
@@ -34,9 +19,9 @@ void print_global_diagnostics(Simulation *sim, int step) {
 
     double sumC2 = 0.0;
     for (int i = 0; i < sim->NP; i++) {
-        double cx = sim->P.vel[IDX_PARTICLE(i, 0)] - ux;
-        double cy = sim->P.vel[IDX_PARTICLE(i, 1)] - uy;
-        double cz = sim->P.vel[IDX_PARTICLE(i, 2)] - uz;
+        double cx = sim->P.vx[i] - ux;
+        double cy = sim->P.vy[i] - uy;
+        double cz = sim->P.vz[i] - uz;
         sumC2 += cx * cx + cy * cy + cz * cz;
     }
 
@@ -49,7 +34,7 @@ void print_global_diagnostics(Simulation *sim, int step) {
     printf("  totalCollisions = %lld\n", sim->totalCollisions);
 }
 
-void write_averaged_macros(Simulation *sim, const char *filename, Cell *global_samples) {
+void write_averaged_macros(Simulation *sim, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open output file\n");
@@ -65,7 +50,7 @@ void write_averaged_macros(Simulation *sim, const char *filename, Cell *global_s
                 double yc = (l + 0.5) * sim->conf->dy;
                 double zc = (m + 0.5) * sim->conf->dz;
 
-                double avgNP = global_samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
+                double avgNP = sim->samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
 
                 if (avgNP <= 0.0) {
                     fprintf(fp, "%e %e %e %e %e %e %e %e %e\n",
@@ -73,13 +58,13 @@ void write_averaged_macros(Simulation *sim, const char *filename, Cell *global_s
                     continue;
                 }
 
-                double count = global_samples[IDX_CELL(k, l, m)].countNP;
+                double count = sim->samples[IDX_CELL(k, l, m)].countNP;
 
-                double ux = global_samples[IDX_CELL(k, l, m)].countVx / count;
-                double uy = global_samples[IDX_CELL(k, l, m)].countVy / count;
-                double uz = global_samples[IDX_CELL(k, l, m)].countVz / count;
+                double ux = sim->samples[IDX_CELL(k, l, m)].countVx / count;
+                double uy = sim->samples[IDX_CELL(k, l, m)].countVy / count;
+                double uz = sim->samples[IDX_CELL(k, l, m)].countVz / count;
 
-                double meanV2 = global_samples[IDX_CELL(k, l, m)].countV2 / count;
+                double meanV2 = sim->samples[IDX_CELL(k, l, m)].countV2 / count;
                 double meanU2 = ux * ux + uy * uy + uz * uz;
 
                 double n = sim->conf->weight * avgNP / sim->conf->cellVolume;

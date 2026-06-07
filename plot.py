@@ -4,8 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Circle
 import sys
-import matplotlib
-matplotlib.use('Agg')
 
 
 # columns for file format: x y z? n ux uy uz T avg_count
@@ -39,11 +37,6 @@ def load_structured_field(filename, density_col, temp_col, ux_col, uy_col, z_val
     # extract only a single z-slice
     if (z_present):
         # z_val = 0.55;
-        unique_z_vals = np.unique(data[:, 2])
-        if z_val not in unique_z_vals:
-            print(f'wrong z_val={z_val}, not in {unique_z_vals}')
-            exit(0)
-
         data = data[data[:, 2] == z_val]
         # remove z column
         data = np.delete(data, 2, axis=1)

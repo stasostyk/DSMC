@@ -71,13 +71,13 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                     int i_global = localParticleList[i];
                     int j_global = localParticleList[j];
 
-                    float vx_i = P.vel[IDX_PARTICLE(i_global, 0)];
-                    float vy_i = P.vel[IDX_PARTICLE(i_global, 1)];
-                    float vz_i = P.vel[IDX_PARTICLE(i_global, 2)];
+                    float vx_i = P.vx[i_global];
+                    float vy_i = P.vy[i_global];
+                    float vz_i = P.vz[i_global];
 
-                    float vx_j = P.vel[IDX_PARTICLE(j_global, 0)];
-                    float vy_j = P.vel[IDX_PARTICLE(j_global, 1)];
-                    float vz_j = P.vel[IDX_PARTICLE(j_global, 2)];
+                    float vx_j = P.vx[j_global];
+                    float vy_j = P.vy[j_global];
+                    float vz_j = P.vz[j_global];
 
                     float relativeVel[3] = {vx_j - vx_i, vy_j - vy_i, vz_j - vz_i};
                     float relativeSpeed = sqrt(relativeVel[0] * relativeVel[0]
@@ -88,17 +88,17 @@ __global__ void hss_scheme_kernel(unsigned long long *total_collisions,
                     float prob = d_conf.hss_collisionProbMultiplier * N_x * relativeSpeed;
                     if (curand_uniform(&rngState) < prob) {
                         //                    4. collide
-                        float N[3];  
+                        float N[3];
                         random_isotropic_vector_device(N, &rngState);
                         relativeSpeed *= 0.5f;
                         float VC[3] = {0.5f * (vx_j + vx_i), 0.5f * (vy_j + vy_i), 0.5f * (vz_j + vz_i)};
                         float VCr[3] = {relativeSpeed * N[0], relativeSpeed * N[1], relativeSpeed * N[2]};
-                        P.vel[IDX_PARTICLE(i_global, 0)] = VC[0] + VCr[0];
-                        P.vel[IDX_PARTICLE(i_global, 1)] = VC[1] + VCr[1];
-                        P.vel[IDX_PARTICLE(i_global, 2)] = VC[2] + VCr[2];
-                        P.vel[IDX_PARTICLE(j_global, 0)] = VC[0] - VCr[0];
-                        P.vel[IDX_PARTICLE(j_global, 1)] = VC[1] - VCr[1];
-                        P.vel[IDX_PARTICLE(j_global, 2)] = VC[2] - VCr[2];
+                        P.vx[i_global] = VC[0] + VCr[0];
+                        P.vy[i_global] = VC[1] + VCr[1];
+                        P.vz[i_global] = VC[2] + VCr[2];
+                        P.vx[j_global] = VC[0] - VCr[0];
+                        P.vy[j_global] = VC[1] - VCr[1];
+                        P.vz[j_global] = VC[2] - VCr[2];
 
                         collisions += 1;
                     }
