@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
         }
 
         if (conf.printPeriod > 0 && step % conf.printPeriod == 0) {
-            move_neccessary_data_before_printing(&sim);
+            move_necessary_data_before_printing(&sim);
             print_global_diagnostics(&sim, step);
         }
     }
@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     timer_end(&t);
     timer_print(&t, "SIMULATION LOOP");
 
-    move_neccessary_data_before_printing(&sim);
+    move_necessary_data_before_printing(&sim);
 
     Cell *global_samples = reduceSamples(&sim, &mpiHelper);
 

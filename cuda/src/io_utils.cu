@@ -7,10 +7,7 @@
 #include "../include/simulation.h"
 #include "../include/mpi_helper.h"
 
-void move_neccessary_data_before_printing(Simulation *sim) {
-    // Particle data is mostly stored in and dealt in GPU, 
-    // to have the newest version in CPU, it needs to be copied.
-   
+void move_necessary_data_before_printing(Simulation *sim) {   
     CHECK(cudaMemcpy(&sim->totalCollisions, sim->d_totalCollisions, sizeof(unsigned long long), cudaMemcpyDeviceToHost))
 
     CHECK(cudaMemcpy(sim->P.pos, sim->d_P.pos, sim->NP * sizeof(float) * 3, cudaMemcpyDeviceToHost));

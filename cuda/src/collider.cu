@@ -54,7 +54,7 @@ __global__ void ntcs_work_queue_kernel(
     curandState *rngStates, int *sortedCells, int totalCells,
     unsigned int *workQueueHead
 ) {
-    __shared__ unsigned int collisionsBlock[64];
+    __shared__ unsigned int collisionsBlock[128];
     unsigned int collisions = 0;
 
     int true_tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -228,8 +228,8 @@ void collide_particles(Simulation *sim) {
     // Launch maximally occupied kernel for the light (majority) of the cells using NTCS work queue
     int numSMs;
     cudaDeviceGetAttribute(&numSMs, cudaDevAttrMultiProcessorCount, 0);
-    int threadsPerBlock = 64;
-    int blocks = numSMs;
+    int threadsPerBlock = 128;
+    int blocks = numSMs*4;
 
     ntcs_work_queue_kernel<<<blocks, threadsPerBlock>>>(
         sim->d_totalCollisions, sim->d_P,

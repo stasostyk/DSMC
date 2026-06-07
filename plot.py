@@ -196,7 +196,7 @@ def main():
     axes[0].set_ylabel("Y")
 
     plt.tight_layout()
-    plt.savefig(output_filename, dpi=300)
+    plt.savefig(output_filename, dpi=1000)
 
 
 if __name__ == "__main__":
