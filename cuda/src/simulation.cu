@@ -224,10 +224,9 @@ __global__ void mark_valid_kernel(Particles P, int *valid, int NP, bool useMPI) 
          z >= 0.0f && z < d_conf.Lz);
 }
 
-// Removes the particles that were created inside the spheres.
-// This is called only once, at the initialization of the 
-// particles inside the whole volume, which happens before
-// the main simulation loop.
+/*
+ * Called only during initialization, ensures no particles spawn in volume
+*/
 __global__ void filter_particles_inside_sphere(
     Particles P, Particles P_out, int NP, int *new_NP
 ) {
@@ -281,7 +280,6 @@ void remove_particles_inside_spheres(Simulation *sim) {
 
 void initialize_particles(Simulation *sim, MPIHelper *mpiHelper) {
     sim->NP = 0;
-    // generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
     
     float xMin = (mpiHelper == NULL) ? 0.0f : mpiHelper->xMin;
     float xMax = (mpiHelper == NULL) ? sim->conf->Lx : mpiHelper->xMax;

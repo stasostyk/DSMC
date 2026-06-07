@@ -98,9 +98,9 @@ void config_setup(Config *config, int object_case) {
     }
 
     // VHS model
-    // NOTE: collider calculations assume omega=0.75, so be careful when changing
-    config->omega = 0.75;          // or ~0.74 to 0.77 for air-like species
-    config->dRef  = 4.0e-10;       // reference diameter, meters
+    // NOTE: collider calculations assume omega=0.75 for performance optimizations using sqrt
+    config->omega = 0.75; // dimensionless viscosity index, typically around 0.74 for air
+    config->dRef  = 4.0e-10; // reference diameter (DSMC param)
 
     // derived parameters
     config->moleculeMass = config->molarMass / config->NA;
@@ -135,8 +135,9 @@ void config_setup(Config *config, int object_case) {
     config->ntcs_collisionProbMultiplier = pow(config->CrRef, config->ntcs_collisionProbExponent) * config->sigmaRef / majorant;
     config->ntcs_collisionProbMultiplierSquared = config->ntcs_collisionProbMultiplier * config->ntcs_collisionProbMultiplier;
 
+    // precompute params for HSS scheme
     config->hss_nbatch = 2;
-    config->hss_threshold = 300.0; // threshold for switching to HSS, in number of particles per cell
+    config->hss_threshold = 300.0; // threshold for switching to HSS, chosen by experimentation
     config->hss_collisionProbMultiplierSquared = config->weight
         * config->sigmaRef
         * pow(config->CrRef, config->ntcs_collisionProbExponent)

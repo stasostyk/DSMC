@@ -61,17 +61,18 @@ typedef struct {
     float UxFree, UyFree, UzFree;
     int totalCells;
 
-    // derived, used in collider
+    // Variable Hard Sphere (VHS) model parameters, used in collider
     double sigmaRef;
     double CrRef;
-    double ntcs_collisionProbMultiplier; // used in no time collision scheme
-    double ntcs_collisionProbMultiplierSquared; // used in no time collision scheme
-    double ntcs_collidingPairsMultiplier; // used in no time collision scheme
-    double ntcs_collisionProbExponent;    // used in no time collision scheme
-
-    double hss_nbatch; // used in HSS scheme
-    double hss_threshold; // used in HSS scheme
-    double hss_collisionProbMultiplierSquared; // used in HSS scheme
+    // No Time Collision Scheme (NTCS) parameters
+    double ntcs_collisionProbMultiplier;
+    double ntcs_collisionProbMultiplierSquared;
+    double ntcs_collidingPairsMultiplier;
+    double ntcs_collisionProbExponent;
+    // Half-Split-Shuffle (HSS) scheme parameters
+    double hss_nbatch;
+    double hss_threshold;
+    double hss_collisionProbMultiplierSquared;
 
     // derived, used in simulation
     float generation_derivatedMultiplier;

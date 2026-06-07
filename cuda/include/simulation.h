@@ -13,21 +13,14 @@
 #define IDX_PARTICLE(i, j) (i * 3 + j)
 
 typedef struct {
-    // for using randomness in GPU
-    // allocated in device memory (GPU)
-    curandState *rngStates; 
+    curandState *rngStates; // allocated device memory RNG states
 
     Config *conf;   // allocated in host (CPU)
 
-    // Particles will be initialized by device kernels, and during simulation
-    // will be dealt only by kernels (GPU). There is no need to allocate
-    // the same particle data on CPU and keep moving data.
-    // Particles in CPU are only moved to count and print global diagnostics data.
-    // Similar logic applies to samples, cellCount, cellList.
-    Particles P;   // allocated in host memory (CPU)
+    Particles P;   // allocated in host memory (CPU) (only used for final printing of results)
     Particles d_P; // allocated in device memory (GPU)
-    Particles d_new_P; // allocated in device memory(GPU), will be used as temporary storage
-                       // when creating new particles
+    Particles d_new_P; // will be used as temporary storage
+
     Cell *samples;    // allocated in host memory (CPU)
     Cell *d_samples;  // allocated in device memory (GPU)
     int *d_cellCount; // allocated in device memory (GPU)
@@ -49,7 +42,7 @@ typedef struct {
     // counters
     int sampleSteps;
     int NP;
-    int *d_new_NP;  // allocated in device memory (GPU) as a temporary variable to be used
+    int *d_new_NP;  // for updating NP after filtering, allocated in device memory (GPU)
 
     unsigned long long totalCollisions;
     unsigned long long *d_totalCollisions;
