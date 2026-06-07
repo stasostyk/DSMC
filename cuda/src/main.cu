@@ -3,7 +3,6 @@
 #include <time.h>
 #include <math.h>
 #include <cuda_runtime.h>
-#include "../include/collider_hss.h"
 #include "../include/collider.h"
 #include "../include/simulation.h"
 #include "../include/io_utils.h"
@@ -51,7 +50,6 @@ int main(int argc, char **argv) {
         apply_boundary_conditions_free_stream(&sim, NULL);
         filter_and_index_particles(&sim, false);
         
-        collide_particles_hss(&sim);
         collide_particles(&sim);
 
         if (step >= conf.firstSampleStep && step % conf.samplingPeriod == 0) {

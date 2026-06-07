@@ -71,7 +71,7 @@ typedef struct {
 
     double hss_nbatch; // used in HSS scheme
     double hss_threshold; // used in HSS scheme
-    double hss_collisionProbMultiplier; // used in HSS scheme
+    double hss_collisionProbMultiplierSquared; // used in HSS scheme
 
     // derived, used in simulation
     float generation_derivatedMultiplier;
