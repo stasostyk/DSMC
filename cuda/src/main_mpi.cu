@@ -90,9 +90,10 @@ int main(int argc, char **argv) {
     if (mpiHelper.worldRank == 0) {
         print_global_diagnostics(&sim, conf.nSteps);
         write_averaged_macros(&sim, "fields_avg.dat", global_samples);
-        if (global_samples != NULL) free(global_samples);
-        // write_paraview_files(&sim, conf.nSteps);
+        write_paraview_files(&sim, conf.nSteps, global_samples);
     }
+
+    if (global_samples != NULL) free(global_samples);
 
     clearPointers(&sim);
 
