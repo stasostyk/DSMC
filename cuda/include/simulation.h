@@ -4,11 +4,13 @@
 #include "particles.h"
 #include "cell.h"
 #include "config.h"
+#include "mpi_helper.h"
 
 #include <curand_kernel.h>
 
-#define IDX_CELL(k, l, m) ((k)*NY*NZ + (l)*NZ + m)
-#define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + q)
+#define IDX_CELL(k, l, m) ((k)*NY*NZ + (l)*NZ + (m))
+#define IDX_LIST(k, l, m, q) (IDX_CELL(k, l, m) * MAX_PARTICLES_PER_CELL + (q))
+#define IDX_PARTICLE(i, j) (i * 3 + j)
 
 typedef struct {
     // for using randomness in GPU
@@ -39,6 +41,11 @@ typedef struct {
     int *d_cellKeys;
     int *d_cellCountPrefSumCopy;
 
+    int *d_sortedCells;     // indices 0...NX*NY*NZ-1 sorted by descending cellCount
+    int *d_cellCountSorted; // scratch, counts reordered alongside keys
+
+    unsigned int *d_workQueueHead;
+
     // counters
     int sampleSteps;
     int NP;
@@ -49,9 +56,9 @@ typedef struct {
 } Simulation;
 
 void setup(Simulation *sim, Config *conf);
-void filter_and_index_particles(Simulation *sim);
-void initialize_particles(Simulation *sim);
-void apply_boundary_conditions_free_stream(Simulation *sim);
+void filter_and_index_particles(Simulation *sim, bool useMPI);
+void initialize_particles(Simulation *sim, MPIHelper *mpiHelper);
+void apply_boundary_conditions_free_stream(Simulation *sim, MPIHelper *mpiHelper);
 void move_particles(Simulation *sim);
 void accumulate_sampling(Simulation *sim);
 void clearPointers(Simulation *sim);

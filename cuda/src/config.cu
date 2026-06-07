@@ -114,6 +114,8 @@ void config_setup(Config *config, int object_case) {
     config->inv_dy = NY / config->Ly;
     config->inv_dz = NZ / config->Lz;
 
+    config->totalCells = NX * NY * NZ;
+
     config->NFree = config->PFree / ( config->KB * config->TFree );
     config->UFree = config->MaFree * sqrt ( ( 5.0 / 3.0 ) * config->KB * config->TFree / config->moleculeMass );
     config->UxFree = config->UFree * cos ( M_PI * config->angleOfAttack / 180.0 );

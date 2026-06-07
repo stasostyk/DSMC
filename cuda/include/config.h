@@ -10,10 +10,9 @@
 #define NY 50
 #define NZ 50
 
-#define PARTICLES_FIELD_SZ (MAX_PARTICLES * sizeof(float))
+#define PARTICLES_FIELD_SZ (MAX_PARTICLES * 3 * sizeof(float))
 #define SAMPLES_SZ (NX * NY * NZ * sizeof(Cell))
 #define CELL_COUNT_SZ (NX * NY * NZ * sizeof(int))
-#define CELL_LIST_SZ (NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int))
 
 typedef struct {
     double KB;
@@ -60,6 +59,7 @@ typedef struct {
     float NFree;
     float UFree;
     float UxFree, UyFree, UzFree;
+    int totalCells;
 
     // derived, used in collider
     double sigmaRef;
