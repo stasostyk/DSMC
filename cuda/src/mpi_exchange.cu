@@ -1,0 +1,301 @@
+#include "../include/mpi_exchange.h"
+#include <cuda_runtime.h>
+#include "../include/particles.h"
+#include "../include/mpi_helper.h"
+#include "../include/simulation.h"
+#include "../include/config.h"
+#include <cub/cub.cuh>
+#include <mpi.h>
+#include "../include/cuda_utils.h"
+
+#include <thrust/iterator/transform_iterator.h>
+
+struct FlagEquals {
+    int target;
+    __device__ int operator()(int f) const { return f == target; }
+};
+
+__global__ void classify_particles_kernel(
+    Particles P, int NP,
+    float x_lo, float x_hi,
+    int *d_flag,   // 0=keep, 1=send_left, 2=send_right
+    int *d_count   // [0]=keep, [1]=send_left, [2]=send_right (atomics)
+) {
+    __shared__ int s_count[2];
+
+    if (threadIdx.x < 2) s_count[threadIdx.x] = 0;
+    __syncthreads();
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i < NP) {
+        float x = P.pos[IDX_PARTICLE(i,0)];
+        int flag;
+
+        if (x < x_lo) 
+            flag = 1;
+        else if (x >= x_hi) 
+            flag = 2;
+        else 
+            flag = 0;
+
+        d_flag[i] = flag;
+
+        if (flag > 0)
+            atomicAdd(&s_count[flag-1], 1);
+    }
+
+    __syncthreads();
+
+    if (threadIdx.x < 2 && s_count[threadIdx.x] > 0)
+        atomicAdd(&d_count[threadIdx.x], s_count[threadIdx.x]);
+}
+
+__global__ void scatter_send_kernel(
+    Particles P, int NP,
+    int *d_flag, int *d_prefix_left, int *d_prefix_right,  // prefix sum of (flag==1) and (flag==2)
+    float *send_left,            // packed: x,y,z,vx,vy,vz interleaved
+    float *send_right
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= NP) return;
+
+    int flag = d_flag[i];
+
+    if (flag == 1) {
+        int j = d_prefix_left[i] * 6;  // prefix of send_left flags
+        send_left[j+0] = P.pos[IDX_PARTICLE(i,0)];
+        send_left[j+1] = P.pos[IDX_PARTICLE(i,1)];
+        send_left[j+2] = P.pos[IDX_PARTICLE(i,2)];
+        send_left[j+3] = P.vel[IDX_PARTICLE(i,0)];
+        send_left[j+4] = P.vel[IDX_PARTICLE(i,1)];
+        send_left[j+5] = P.vel[IDX_PARTICLE(i,2)];
+    } else if (flag == 2) {
+        int j = d_prefix_right[i] * 6;  // prefix of send_right flags
+        send_right[j+0] = P.pos[IDX_PARTICLE(i,0)];
+        send_right[j+1] = P.pos[IDX_PARTICLE(i,1)];
+        send_right[j+2] = P.pos[IDX_PARTICLE(i,2)];
+        send_right[j+3] = P.vel[IDX_PARTICLE(i,0)];
+        send_right[j+4] = P.vel[IDX_PARTICLE(i,1)];
+        send_right[j+5] = P.vel[IDX_PARTICLE(i,2)];
+    } 
+}
+
+__global__ void unpack_recv_kernel(
+    Particles P, int offset,
+    float *recv_buf, int recv_n
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= recv_n) return;
+
+    int j = offset + i;
+    P.pos[IDX_PARTICLE(j,0)]  = recv_buf[i*6+0];
+    P.pos[IDX_PARTICLE(j,1)]  = recv_buf[i*6+1];
+    P.pos[IDX_PARTICLE(j,2)]  = recv_buf[i*6+2];
+    P.vel[IDX_PARTICLE(j,0)] = recv_buf[i*6+3];
+    P.vel[IDX_PARTICLE(j,1)] = recv_buf[i*6+4];
+    P.vel[IDX_PARTICLE(j,2)] = recv_buf[i*6+5];
+}
+
+__global__ void set_valid_kernel(int *d_valid, int offset, int count) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= count) return;
+    d_valid[offset + i] = 0;
+}
+
+void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
+    int threads = 128;
+    dim3 block(threads);
+    dim3 grid((sim->NP + threads - 1) / threads);
+
+    CHECK(cudaMemset(mpiHelper->d_count, 0, 2 * sizeof(int)));
+
+    classify_particles_kernel<<<grid, block>>>(
+        sim->d_P, sim->NP, mpiHelper->xMin, mpiHelper->xMax,
+        sim->d_valid, mpiHelper->d_count
+    );
+    CHECK_KERNELCALL();
+
+    auto is_left  = thrust::make_transform_iterator(sim->d_valid, FlagEquals{1});
+    auto is_right = thrust::make_transform_iterator(sim->d_valid, FlagEquals{2});
+
+    cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
+        is_left,  mpiHelper->d_prefix_left,  sim->NP);
+    cub::DeviceScan::ExclusiveSum(sim->d_temp_storage, sim->temp_storage_bytes,
+        is_right, mpiHelper->d_prefix_right, sim->NP);
+
+
+    int h_count[2];
+    CHECK(cudaMemcpy(h_count, mpiHelper->d_count, 2 * sizeof(int), cudaMemcpyDeviceToHost));
+    int left_n  = h_count[0];
+    int right_n = h_count[1];
+
+    if (left_n > mpiHelper->bufferToSendLeftCount || right_n > mpiHelper->bufferToSendRightCount) {
+        fprintf(stderr, "Rank %d: exchange buffer overflow! left=%d right=%d bufLeft=%d\n bufRight=%d\n",
+                mpiHelper->worldRank, left_n, right_n, mpiHelper->bufferToSendLeftCount,
+                mpiHelper->bufferToSendRightCount);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    scatter_send_kernel<<<grid, block>>>(
+        sim->d_P, sim->NP,
+        sim->d_valid,
+        mpiHelper->d_prefix_left,   // used for send_left indexing
+        mpiHelper->d_prefix_right,  // used for send_right indexing  
+        mpiHelper->d_send_left,
+        mpiHelper->d_send_right
+    );
+    CHECK_KERNELCALL();
+
+    // Copy send buffers device -> host
+    // this is done assynchronously with the MPI sending below
+    CHECK(cudaMemcpy(mpiHelper->h_send_left,  mpiHelper->d_send_left,
+                     left_n  * 6 * sizeof(float), cudaMemcpyDeviceToHost
+    ));
+    CHECK(cudaMemcpy(mpiHelper->h_send_right, mpiHelper->d_send_right,
+                     right_n * 6 * sizeof(float), cudaMemcpyDeviceToHost
+    ));
+
+    // Exchange counts
+    int recv_left_n = 0, recv_right_n = 0;
+    MPI_Sendrecv(&left_n,       1, MPI_INT, mpiHelper->left_rank,  0,
+                 &recv_right_n, 1, MPI_INT, mpiHelper->right_rank, 0,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(&right_n,      1, MPI_INT, mpiHelper->right_rank, 1,
+                 &recv_left_n,  1, MPI_INT, mpiHelper->left_rank,  1,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    // Exchange particle data between different hosts
+    MPI_Sendrecv(mpiHelper->h_send_left,  left_n       * 6, MPI_FLOAT, mpiHelper->left_rank,  2,
+                 mpiHelper->h_recv_right, recv_right_n * 6, MPI_FLOAT, mpiHelper->right_rank, 2,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Sendrecv(mpiHelper->h_send_right, right_n      * 6, MPI_FLOAT, mpiHelper->right_rank, 3,
+                 mpiHelper->h_recv_left,  recv_left_n  * 6, MPI_FLOAT, mpiHelper->left_rank,  3,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    int recv_left_offset  = sim->NP;
+    int recv_right_offset = sim->NP + recv_left_n;
+
+    if (recv_left_n > 0) {
+        unpack_recv_kernel<<<(recv_left_n + threads-1)/threads, block>>>(
+            sim->d_P, recv_left_offset,
+            mpiHelper->d_recv_left_mapped, recv_left_n
+        );
+        CHECK_KERNELCALL();
+    }
+    if (recv_right_n > 0) {
+        unpack_recv_kernel<<<(recv_right_n + threads-1)/threads, block>>>(
+            sim->d_P, recv_right_offset,
+            mpiHelper->d_recv_right_mapped, recv_right_n
+        );
+        CHECK_KERNELCALL();
+    }
+
+    int recv_total = recv_left_n + recv_right_n;
+    if (recv_total > 0) {
+        int threads = 128;
+        set_valid_kernel<<<(recv_total + threads-1)/threads, threads>>>(
+            sim->d_valid, sim->NP, recv_total
+        );
+        CHECK_KERNELCALL();
+    }
+
+    // swap_particles_with_new_another_func(sim);
+    sim->NP = sim->NP + recv_left_n + recv_right_n;
+}
+
+void setupMPIHelper(MPIHelper *mpiHelper, Config *conf) {
+    int world_rank, world_size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    // Assign one GPU per MPI rank
+    int num_gpus;
+    CHECK(cudaGetDeviceCount(&num_gpus));
+    CHECK(cudaSetDevice(world_rank % num_gpus));
+
+    mpiHelper->worldRank = world_rank;
+    mpiHelper->worldSize = world_size;
+    mpiHelper->numGpus = num_gpus;
+
+    printf("world rank: %d\n", world_rank);
+    printf("world size: %d\n", world_size);
+    printf("num gpus: %d\n", num_gpus);
+
+    mpiHelper->slabWidth = conf->Lx / (float)world_size;
+    mpiHelper->xMin = (float)world_rank * mpiHelper->slabWidth;
+    mpiHelper->xMax = mpiHelper->xMin + mpiHelper->slabWidth;
+
+    mpiHelper->left_rank = (world_rank > 0) ? world_rank - 1 : MPI_PROC_NULL;
+    mpiHelper->right_rank = (world_rank < world_size-1) ? world_rank + 1 : MPI_PROC_NULL;
+
+    cudaDeviceProp prop;
+    CHECK(cudaGetDeviceProperties(&prop, world_rank % num_gpus));
+    if (!prop.canMapHostMemory) {
+        fprintf(stderr, "Device does NOT support mapped host memory\n");
+        MPI_Finalize();
+        exit(1);
+    }
+
+    printf("slab width: %f\n", mpiHelper->slabWidth);
+    printf("xmin: %f\n", mpiHelper->xMin);
+    printf("xmax: %f\n", mpiHelper->xMax);
+
+    // Assume (because of the stream), potentially more particles going right
+    // Values got empirically
+    int particlesGoingRight = MAX_PARTICLES / 10;
+    int particlesGoingLeft = MAX_PARTICLES / 10;
+
+    mpiHelper->bufferToSendLeftCount = particlesGoingLeft;
+    mpiHelper->bufferToSendRightCount = particlesGoingRight;
+
+    CHECK(cudaMalloc(&mpiHelper->d_count,  2 * sizeof(int)));
+    CHECK(cudaMalloc(&mpiHelper->d_send_left, 6 * sizeof(float) * particlesGoingLeft));
+    CHECK(cudaMalloc(&mpiHelper->d_send_right, 6 * sizeof(float) * particlesGoingRight));
+    CHECK(cudaMalloc(&mpiHelper->d_prefix_right, sizeof(int) * MAX_PARTICLES));
+    CHECK(cudaMalloc(&mpiHelper->d_prefix_left, sizeof(int) * MAX_PARTICLES));
+
+    // Use pinned memory for faster D2H/H2D transfers
+    CHECK(cudaMallocHost(&mpiHelper->h_send_left,  particlesGoingLeft * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper->h_send_right, particlesGoingRight * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper->h_recv_left,  particlesGoingRight * 6 * sizeof(float)));
+    CHECK(cudaMallocHost(&mpiHelper->h_recv_right, particlesGoingLeft * 6 * sizeof(float)));
+
+    // Recv side: access is sequential in unpack_recv_kernel, so zero-copy is fine
+    CHECK(cudaHostAlloc(&mpiHelper->h_recv_left,  particlesGoingRight * 6 * sizeof(float), cudaHostAllocMapped));
+    CHECK(cudaHostAlloc(&mpiHelper->h_recv_right, particlesGoingLeft * 6 * sizeof(float), cudaHostAllocMapped));
+    CHECK(cudaHostGetDevicePointer(&mpiHelper->d_recv_left_mapped,  mpiHelper->h_recv_left,  0));
+    CHECK(cudaHostGetDevicePointer(&mpiHelper->d_recv_right_mapped, mpiHelper->h_recv_right, 0));
+}
+
+Cell *reduceSamples(Simulation *sim, MPIHelper *mpiHelper) {
+    // Each rank has samples for its local cells
+    // Reduce to rank 0 for output
+    // int world_size = mpiHelper->worldSize;
+
+    Cell *global_samples = NULL;
+    if (mpiHelper->worldRank == 0) {
+        global_samples = (Cell *)malloc(SAMPLES_SZ);
+        memset(global_samples, 0, SAMPLES_SZ);
+    }
+
+    // Each rank has samples for its local cells
+    // Reduce to rank 0 for output
+    MPI_Reduce(sim->samples, global_samples,
+                sizeof(Cell)/sizeof(float) * NX*NY*NZ,
+                MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    return global_samples;
+}
+
+void freeMPIHelper(MPIHelper *mpiHelper) {
+    CHECK(cudaFree(mpiHelper->d_prefix_left));
+    CHECK(cudaFree(mpiHelper->d_prefix_right));
+    CHECK(cudaFree(mpiHelper->d_count));
+    CHECK(cudaFree(mpiHelper->d_send_left));
+    CHECK(cudaFree(mpiHelper->d_send_right));
+    CHECK(cudaFreeHost(mpiHelper->h_recv_left));
+    CHECK(cudaFreeHost(mpiHelper->h_recv_right));
+    CHECK(cudaFreeHost(mpiHelper->h_send_left));
+    CHECK(cudaFreeHost(mpiHelper->h_send_right));
+}
