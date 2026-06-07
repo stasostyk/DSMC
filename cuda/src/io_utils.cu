@@ -93,7 +93,7 @@ void write_averaged_macros(Simulation *sim, const char *filename, Cell *global_s
     fclose(fp);
 }
 
-void write_vti(Simulation *sim, const char *filename) {
+void write_vti(Simulation *sim, const char *filename, Cell *global_samples) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open VTI file\n");
@@ -113,7 +113,7 @@ void write_vti(Simulation *sim, const char *filename) {
     for (int m = 0; m < NZ; m++) {
         for (int l = 0; l < NY; l++) {
             for (int k = 0; k < NX; k++) {
-                double avgNP = sim->samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
+                double avgNP = global_samples[IDX_CELL(k, l, m)].countNP / sim->sampleSteps;
                 double n = (avgNP > 0.0) ? sim->conf->weight * avgNP / sim->conf->cellVolume : 0.0;
                 fprintf(fp, "%e ", n);
             }
@@ -126,13 +126,13 @@ void write_vti(Simulation *sim, const char *filename) {
     for (int m = 0; m < NZ; m++) {
         for (int l = 0; l < NY; l++) {
             for (int k = 0; k < NX; k++) {
-                double count = sim->samples[IDX_CELL(k, l, m)].countNP;
+                double count = global_samples[IDX_CELL(k, l, m)].countNP;
 
                 double ux = 0.0, uy = 0.0, uz = 0.0;
                 if (count > 0.0) {
-                    ux = sim->samples[IDX_CELL(k, l, m)].countVx / count;
-                    uy = sim->samples[IDX_CELL(k, l, m)].countVy / count;
-                    uz = sim->samples[IDX_CELL(k, l, m)].countVz / count;
+                    ux = global_samples[IDX_CELL(k, l, m)].countVx / count;
+                    uy = global_samples[IDX_CELL(k, l, m)].countVy / count;
+                    uz = global_samples[IDX_CELL(k, l, m)].countVz / count;
                 }
 
                 fprintf(fp, "%e %e %e ", ux, uy, uz);
@@ -150,11 +150,11 @@ void write_vti(Simulation *sim, const char *filename) {
 
                 double T = 0.0;
                 if (count > 0.0) {
-                    double ux = sim->samples[IDX_CELL(k, l, m)].countVx / count;
-                    double uy = sim->samples[IDX_CELL(k, l, m)].countVy / count;
-                    double uz = sim->samples[IDX_CELL(k, l, m)].countVz / count;
+                    double ux = global_samples[IDX_CELL(k, l, m)].countVx / count;
+                    double uy = global_samples[IDX_CELL(k, l, m)].countVy / count;
+                    double uz = global_samples[IDX_CELL(k, l, m)].countVz / count;
 
-                    double meanV2 = sim->samples[IDX_CELL(k, l, m)].countV2 / count;
+                    double meanV2 = global_samples[IDX_CELL(k, l, m)].countV2 / count;
                     double meanU2 = ux*ux + uy*uy + uz*uz;
 
                     T = sim->conf->moleculeMass * (meanV2 - meanU2) / (3.0 * sim->conf->KB);
@@ -173,17 +173,16 @@ void write_vti(Simulation *sim, const char *filename) {
     fclose(fp);
 }
 
-#ifdef WING_CASE
-void write_wing_vtp(Simulation *sim, const char *filename) {
+void write_wing_vtp(Wing *wing, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open wing file\n");
         exit(1);
     }
 
-    double x0 = sim->conf->WingX;
-    double x1 = sim->conf->WingX + sim->conf->WingLength;
-    double y  = sim->conf->WingY;
+    double x0 = wing->WingX;
+    double x1 = wing->WingX + wing->WingLength;
+    double y  = wing->WingY;
     double z0 = 0.3;
     double z1 = 0.7;
 
@@ -222,10 +221,8 @@ void write_wing_vtp(Simulation *sim, const char *filename) {
 
     fclose(fp);
 }
-#endif
 
-#ifdef SPHERE_CASE
-void write_sphere_vtp(Simulation *sim, const char *filename) {
+void write_sphere_vtp(Sphere *sphere, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
         fprintf(stderr, "Could not open sphere output file\n");
@@ -255,9 +252,9 @@ void write_sphere_vtp(Simulation *sim, const char *filename) {
         for (int j = 0; j <= n_phi; j++) {
             double phi = 2.0 * M_PI * j / n_phi; // 0 -> 2pi
 
-            double x = sim->conf->sphereCenterX + sim->conf->sphereRadius * sin(theta) * cos(phi);
-            double y = sim->conf->sphereCenterY + sim->conf->sphereRadius * sin(theta) * sin(phi);
-            double z = sim->conf->sphereCenterZ + sim->conf->sphereRadius * cos(theta);
+            double x = sphere->sphereCenterX + sphere->sphereRadius * sin(theta) * cos(phi);
+            double y = sphere->sphereCenterY + sphere->sphereRadius * sin(theta) * sin(phi);
+            double z = sphere->sphereCenterZ + sphere->sphereRadius * cos(theta);
 
             fprintf(fp, "%e %e %e\n", x, y, z);
         }
@@ -309,20 +306,21 @@ void write_sphere_vtp(Simulation *sim, const char *filename) {
 
     fclose(fp);
 }
-#endif
 
-void write_paraview_files(Simulation *sim, unsigned int step) {
+void write_paraview_files(Simulation *sim, unsigned int step, Cell *global_samples) {
     char fname[64];
     sprintf(fname, "paraview_fields_%05d.vti", step);
-    write_vti(sim, fname);
+    write_vti(sim, fname, global_samples);
 
-    #ifdef WING_CASE
+    for (int wingId = 0; wingId < sim->conf->wingCnt; wingId++) {
         char wing_fname[64];
-        sprintf(wing_fname, "paraview_wing_%05d.vtp", step);
-        write_wing_vtp(sim, wing_fname);
-    #elif defined(SPHERE_CASE)
+        sprintf(wing_fname, "paraview_wing_%05d_%02d.vtp", step, wingId);
+        write_wing_vtp(&(sim->conf->wings[wingId]), wing_fname);
+    }
+
+    for (int sphereId = 0; sphereId < sim->conf->sphereCnt; sphereId++) {
         char sphere_fname[64];
-        sprintf(sphere_fname, "paraview_sphere_%05d.vtp", step);
-        write_sphere_vtp(sim, sphere_fname);
-    #endif
+        sprintf(sphere_fname, "paraview_sphere_%05d_%02d.vtp", step, sphereId);
+        write_sphere_vtp(&(sim->conf->spheres[sphereId]), sphere_fname);
+    }
 }
