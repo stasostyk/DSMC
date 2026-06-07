@@ -32,6 +32,10 @@ set_target_properties(DSMC_single_gpu PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
 )
 
+target_compile_options(DSMC_single_gpu PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
+)
+
 # -------------------------
 # MPI executable
 # -------------------------
