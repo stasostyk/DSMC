@@ -34,7 +34,7 @@ void setup(Simulation *sim, Config *conf) {
 
     #ifdef WING_CASE
         double angleOfAttack = conf->angleOfAttack;
-    #elif defined(BALL_CASE)
+    #elif defined(SPHERE_CASE)
         double angleOfAttack = 0.;
     #endif
     sim->NFree = conf->PFree / ( conf->KB * conf->TFree );
@@ -126,11 +126,11 @@ void initialize_particles(Simulation *sim, Config *conf) {
     sim->NP = 0;
     generate_particles_in_rect(sim, conf, 0.0, conf->Lx, 0.0, conf->Ly, 0.0, conf->Lz, conf->TFree, 0);
 
-#ifdef BALL_CASE
-    double cx = conf->ballCenterX;
-    double cy = conf->ballCenterY;
-    double cz = conf->ballCenterZ;
-    double R2 = conf->ballRadius * conf->ballRadius;
+#ifdef SPHERE_CASE
+    double cx = conf->sphereCenterX;
+    double cy = conf->sphereCenterY;
+    double cz = conf->sphereCenterZ;
+    double R2 = conf->sphereRadius * conf->sphereRadius;
 
     for (int i = 0; i < sim->NP; i++) {
         double rx = sim->P[i].x - cx;
@@ -204,7 +204,7 @@ void move_particles(Simulation *sim, Config *conf) {
                 sim->P[i].y = WingY + Dt1 * sim->P[i].vy;
             }
         }
-        #elif defined(BALL_CASE)
+        #elif defined(SPHERE_CASE)
         // Ray-sphere intersection test
         {
             // Initial and final positions
@@ -217,10 +217,10 @@ void move_particles(Simulation *sim, Config *conf) {
             double dz = z1 - z0;
 
             // Sphere center
-            double cx = conf->ballCenterX;
-            double cy = conf->ballCenterY;
-            double cz = conf->ballCenterZ;
-            double ballRadius = conf->ballRadius;
+            double cx = conf->sphereCenterX;
+            double cy = conf->sphereCenterY;
+            double cz = conf->sphereCenterZ;
+            double sphereRadius = conf->sphereRadius;
 
             // Shifted initial position
             double rx = x0 - cx;
@@ -230,7 +230,7 @@ void move_particles(Simulation *sim, Config *conf) {
             // Quadratic coefficients: |r + t d|^2 = R^2
             double a = dx*dx + dy*dy + dz*dz;
             double b = 2.0 * (rx*dx + ry*dy + rz*dz);
-            double c = rx*rx + ry*ry + rz*rz - ballRadius*ballRadius;
+            double c = rx*rx + ry*ry + rz*rz - sphereRadius*sphereRadius;
 
             double disc = b*b - 4.0*a*c;
 
@@ -256,9 +256,9 @@ void move_particles(Simulation *sim, Config *conf) {
                     double Dt1 = conf->dt * (1.0 - t_hit);
 
                     // Surface normal (outward)
-                    double nx = (Xw - cx) / ballRadius;
-                    double ny = (Yw - cy) / ballRadius;
-                    double nz = (Zw - cz) / ballRadius;
+                    double nx = (Xw - cx) / sphereRadius;
+                    double ny = (Yw - cy) / sphereRadius;
+                    double nz = (Zw - cz) / sphereRadius;
 
                     // Diffuse reflection aligned with normal
                     diffuse_scattering(&(sim->P[i].vx), &(sim->P[i].vy), &(sim->P[i].vz),

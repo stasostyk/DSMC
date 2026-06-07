@@ -224,32 +224,31 @@ __global__ void mark_valid_kernel(Particles P, int *valid, int NP, bool useMPI) 
          z >= 0.0f && z < d_conf.Lz);
 }
 
-// Removes the particles that were created inside the balls.
-// This is called only once, at the initialization of the 
-// particles inside the whole volume, which happens before
-// the main simulation loop.
-__global__ void filter_particles_inside_ball(
+/*
+ * Called only during initialization, ensures no particles spawn in volume
+*/
+__global__ void filter_particles_inside_sphere(
     Particles P, Particles P_out, int NP, int *new_NP
 ) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= NP) return;
 
-    bool insideBall = false;
+    bool insideSphere = false;
 
-    for (int ballId = 0; ballId < d_conf.ballCnt; ballId++) {
-        float cx = d_conf.balls[ballId].ballCenterX;
-        float cy = d_conf.balls[ballId].ballCenterY;
-        float cz = d_conf.balls[ballId].ballCenterZ;
-        float R2 = d_conf.balls[ballId].ballRadiusSquared;
+    for (int sphereId = 0; sphereId < d_conf.sphereCnt; sphereId++) {
+        float cx = d_conf.spheres[sphereId].sphereCenterX;
+        float cy = d_conf.spheres[sphereId].sphereCenterY;
+        float cz = d_conf.spheres[sphereId].sphereCenterZ;
+        float R2 = d_conf.spheres[sphereId].sphereRadiusSquared;
 
         float rx = P.pos[IDX_PARTICLE(i, 0)] - cx;
         float ry = P.pos[IDX_PARTICLE(i, 1)] - cy;
         float rz = P.pos[IDX_PARTICLE(i, 2)] - cz;
 
-        insideBall |= (rx*rx + ry*ry + rz*rz <= R2);
+        insideSphere |= (rx*rx + ry*ry + rz*rz <= R2);
     }
 
-    if (!insideBall) {
+    if (!insideSphere) {
         int pos = atomicAdd(new_NP, 1);
         P_out.pos[IDX_PARTICLE(pos, 0)] = P.pos[IDX_PARTICLE(i, 0)];
         P_out.pos[IDX_PARTICLE(pos, 1)] = P.pos[IDX_PARTICLE(i, 1)];
@@ -260,14 +259,14 @@ __global__ void filter_particles_inside_ball(
     }
 }
 
-void remove_particles_inside_balls(Simulation *sim) {
+void remove_particles_inside_spheres(Simulation *sim) {
     int threads = 128;
     dim3 threadsPerBlock(threads, 1, 1);
     dim3 blocksPerGrid((sim->NP + threads - 1) / threads, 1, 1);
 
     CHECK(cudaMemset(sim->d_new_NP, 0, sizeof(int)));
 
-    filter_particles_inside_ball<<<blocksPerGrid, threadsPerBlock>>>(
+    filter_particles_inside_sphere<<<blocksPerGrid, threadsPerBlock>>>(
         sim->d_P, sim->d_new_P, sim->NP, sim->d_new_NP
     );
     CHECK_KERNELCALL();
@@ -281,7 +280,6 @@ void remove_particles_inside_balls(Simulation *sim) {
 
 void initialize_particles(Simulation *sim, MPIHelper *mpiHelper) {
     sim->NP = 0;
-    // generate_particles_in_rect(sim, 0.0, sim->conf->Lx, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
     
     float xMin = (mpiHelper == NULL) ? 0.0f : mpiHelper->xMin;
     float xMax = (mpiHelper == NULL) ? sim->conf->Lx : mpiHelper->xMax;
@@ -289,7 +287,7 @@ void initialize_particles(Simulation *sim, MPIHelper *mpiHelper) {
     // only fill particles in the MPI node's domain [xmin, xmax]
     generate_particles_in_rect(sim, xMin, xMax, 0.0, sim->conf->Ly, 0.0, sim->conf->Lz, 0);
 
-    remove_particles_inside_balls(sim);
+    remove_particles_inside_spheres(sim);
 }
 
 void apply_boundary_conditions_free_stream(Simulation *sim, MPIHelper *mpiHelper) {
@@ -508,20 +506,20 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
         }
     }
 
-    // CHECK BALLS
-    for (int ballId = 0; ballId < d_conf.ballCnt; ballId++) {
+    // CHECK SPHERES
+    for (int sphereId = 0; sphereId < d_conf.sphereCnt; sphereId++) {
         // Before doing expensive test, first we can check
-        // if the particle is close enough to the ball, i.e.
-        // if the particle after movement got into the ball.
+        // if the particle is close enough to the sphere, i.e.
+        // if the particle after movement got into the sphere.
 
         // Sphere center
-        float cx = d_conf.balls[ballId].ballCenterX;
-        float cy = d_conf.balls[ballId].ballCenterY;
-        float cz = d_conf.balls[ballId].ballCenterZ;
-        float ballRadius = d_conf.balls[ballId].ballRadius;
+        float cx = d_conf.spheres[sphereId].sphereCenterX;
+        float cy = d_conf.spheres[sphereId].sphereCenterY;
+        float cz = d_conf.spheres[sphereId].sphereCenterZ;
+        float sphereRadius = d_conf.spheres[sphereId].sphereRadius;
         
         float distSquared = (x1 - cx) * (x1 - cx) + (y1 - cy) * (y1 - cy) + (z1 - cz) * (z1 - cz);
-        if (distSquared > ballRadius * ballRadius) continue;
+        if (distSquared > sphereRadius * sphereRadius) continue;
 
         // Ray-sphere intersection test
         
@@ -538,7 +536,7 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
         // Quadratic coefficients: |r + t d|^2 = R^2
         float a = dx*dx + dy*dy + dz*dz;
         float b = 2.0f * (rx*dx + ry*dy + rz*dz);
-        float c = rx*rx + ry*ry + rz*rz - ballRadius*ballRadius;
+        float c = rx*rx + ry*ry + rz*rz - sphereRadius*sphereRadius;
 
         float disc = b*b - 4.0f*a*c;
 
@@ -565,14 +563,14 @@ __global__ void move_particles_kernel(Particles P, int NP, curandState *rngState
                 float Dt1 = d_conf.dt * (1.0f - t_hit);
 
                 // Surface normal (outward)
-                float nx = (Xw - cx) / ballRadius;
-                float ny = (Yw - cy) / ballRadius;
-                float nz = (Zw - cz) / ballRadius;
+                float nx = (Xw - cx) / sphereRadius;
+                float ny = (Yw - cy) / sphereRadius;
+                float nz = (Zw - cz) / sphereRadius;
 
                 curandState rngState = rngStates[i];
                 // Diffuse reflection aligned with normal
                 diffuse_scattering_device(&(P.vel[IDX_PARTICLE(i, 0)]), &(P.vel[IDX_PARTICLE(i, 1)]), &(P.vel[IDX_PARTICLE(i, 2)]),
-                                d_conf.moleculeMass, d_conf.balls[ballId].Tb,
+                                d_conf.moleculeMass, d_conf.spheres[sphereId].Tb,
                                 nx, ny, nz, d_conf.KB,
                                 &rngState
                             );

@@ -9,13 +9,13 @@ typedef struct {
 } Wing;
 
 typedef struct {
-    float ballCenterX;
-    float ballCenterY;
-    float ballCenterZ;
-    float ballRadius;
+    float sphereCenterX;
+    float sphereCenterY;
+    float sphereCenterZ;
+    float sphereRadius;
     double Tb;
 
-    float ballRadiusSquared; // derived
-} Ball;
+    float sphereRadiusSquared; // derived
+} Sphere;
 
 #endif

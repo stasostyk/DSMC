@@ -13,7 +13,6 @@ set(SOURCES
     src/math_utils.cu 
     src/config.cu 
     src/collider.cu
-    src/collider_hss.cu
     src/simulation.cu
     src/io_utils.cu
     src/timer.cu
@@ -31,6 +30,10 @@ target_link_libraries(DSMC_single_gpu PRIVATE m)
 
 set_target_properties(DSMC_single_gpu PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
+)
+
+target_compile_options(DSMC_single_gpu PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>
 )
 
 # -------------------------
