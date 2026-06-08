@@ -20,7 +20,7 @@ This project is a 3D CUDA-accelerated implementation of Direct Simulation Monte 
 
 It works by simulating particles (which correspond to a large number of real particles derived via the statistical weight parameter $W=\frac{\delta x^2 \delta z n_\infty}{N_{C0}}$ determined by the desired number of simulated particles) which are in a mesh-free domain and undergoing an initial flow velocity. Then we group them in cells that are approximately smaller than the mean free path of the molecules, which is a crucial property of rarefied gases that DSMC exploits. Within each cell we probabilistically collide particle pairs based on a probability derived from the kinetic theory of gases. After enough steps have passed for a flow pattern to emerge, we begin with statistical sampling (Monte Carlo method) to ultimately find the average pressure, temperature, and velocity magnitude across the domain.
 
-Our CUDA implementation uses novel techniques in order to boost performance (including what we believe is the first CUDA implementation of the Half-Split-Shuffle algorithm published last year). Despite the control-heavy algorithm of DSMC with stochastic collisions making coalesced accesses particularly difficult, we are happy to share up to a **298x speedup on a single V100 GPU** compared to a mid-range AMD Ryzen 5000 CPU running the equivalent serial version. 
+Our CUDA implementation uses novel techniques in order to boost performance (including what we believe is the first CUDA implementation of the Half-Split-Shuffle algorithm [1] published last year). Despite the control-heavy algorithm of DSMC with stochastic collisions making coalesced accesses particularly difficult, we are happy to share up to a **298x speedup on a single V100 GPU** compared to a mid-range AMD Ryzen 5000 CPU running the equivalent serial version. 
 <p align="center">
   <img src="benchmarking/performance_histogram.png" alt="perf" width="500">
 </p>
@@ -35,7 +35,7 @@ For collisions, we use two approaches. The "No Time Counter Scheme" by G.A. Bird
 <p align="center">
   <img src="vis/ntc.png" alt="b1" width="500">
 </p>
-3. For heavy cells, use the Half Split Shuffle algorithm proposed by Bhattarai et al. just a few months ago, which is a parallel DSMC collision method for FPGAs. We made the first CUDA implementation of this novel method for heavy cells, which gave us **up to $21.2\%$ speedup** on overall execution time (depending on particles number). 
+3. For heavy cells, use the Half Split Shuffle algorithm [1] proposed by Bhattarai et al. just a few months ago, which is a parallel DSMC collision method for FPGAs. We made the first CUDA implementation of this novel method for heavy cells, which gave us **up to $21.2\%$ speedup** on overall execution time (depending on particles number). 
 <p align="center">
   <img src="vis/hss.png" alt="b1" width="500">
 </p>
@@ -194,3 +194,6 @@ python plot.py sphere build/fields_avg.dat 0.55 output_plot.png
 When running without MPI, the `.vpi` and `.vpt` files are created that can be opened with ParaView. This industry standard tool allows for full flexibility with dealing with the data produced by the DSMC simulation. 
 
 ![paraview](vis/paraview.png)
+
+## Citations
+[1] Bhattarai, S., O’ Byrne, S., Peters, E., Petty, D. (2026). Spatially-Parallel Collision Scheme for Implementing Direct Simulation Monte Carlo in Field-Programmable Gate Arrays. In: Grabe, M., Oblapenko, G., Torrilhon, M. (eds) Rarefied Gas Dynamics. RGD 2024. Springer Aerospace Technology. Springer, Cham. https://doi.org/10.1007/978-3-032-00094-1_38 
