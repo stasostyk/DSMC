@@ -148,7 +148,6 @@ void exchange_boundary_particles(Simulation *sim, MPIHelper *mpiHelper) {
     CHECK_KERNELCALL();
 
     // Copy send buffers device -> host
-    // this is done assynchronously with the MPI sending below
     CHECK(cudaMemcpy(mpiHelper->h_send_left,  mpiHelper->d_send_left,
                      left_n  * 6 * sizeof(float), cudaMemcpyDeviceToHost
     ));

@@ -46,7 +46,7 @@ __device__ bool collide_pair(Particles P, int i, int j, float multiplier, curand
 }
 
 /*
- * No Time Collision Scheme (NTCS) kernel using worker queue parallelel pattern
+ * No Time Counter Scheme (NTCS) kernel using worker queue parallelel pattern
 */
 __global__ void ntcs_work_queue_kernel(
     unsigned long long *total_collisions,

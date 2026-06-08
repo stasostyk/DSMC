@@ -1,41 +1,61 @@
 # DSMC Particle Simulator
 
 
-![Plot1](vis/vis.png)
-![Plot2](vis/combo.png)
-![Plot3](vis/advanced_plot.png)
+![Plot1](vis/124-gridball.png)
+![Plot2](vis/124-grid-combo.png)
+![Plot3](vis/124-grid-wing.png)
 
 This project is a 3D CUDA-accelerated implementation of Direct Simulation Monte Carlo (DSMC), which is a stochastic solution of the Boltzmann equation for rarefied gases. These gases are common in supersonic and hypersonic flows with a Knudsen number $\text{Kn}\gt 1$, where Navier Stokes equations have proven to be inaccurate because the continuum assumption fails. For example, it is used in aerodynamics to model Space Shuttle re-entry into the atmosphere.
 
+## Contents
+
+- [Description](#description)
+- [Handling Collisions](#handling-collisions)
+- [Cuda Development Process](#cuda-development-process)
+- [Memory Coalescing](#memory-coalescing)
+- [Multi-GPU Implementation](#multi-gpu-implementation)
+- [Building and Running](#building-and-running)
+
+## Description
+
 It works by simulating particles (which correspond to a large number of real particles derived via the statistical weight parameter $W=\frac{\delta x^2 \delta z n_\infty}{N_{C0}}$ determined by the desired number of simulated particles) which are in a mesh-free domain and undergoing an initial flow velocity. Then we group them in cells that are approximately smaller than the mean free path of the molecules, which is a crucial property of rarefied gases that DSMC exploits. Within each cell we probabilistically collide particle pairs based on a probability derived from the kinetic theory of gases. After enough steps have passed for a flow pattern to emerge, we begin with statistical sampling (Monte Carlo method) to ultimately find the average pressure, temperature, and velocity magnitude across the domain.
 
-Our CUDA implementation uses novel techniques in order to boost performance (including what we believe is the first CUDA implementation of the Half-Split-Shuffle algorithm published last year). Despite the control-heavy algorithm of DSMC with stochastic collisions making coalesced accesses particularly difficult, we are happy to share up to a **298x speedup on a single V100 GPU** compared to a mid-range AMD Ryzen 5000 CPU running the equivalent serial version. 
+Our CUDA implementation uses novel techniques in order to boost performance (including what we believe is the first CUDA implementation of the Half-Split-Shuffle algorithm [1] published last year). Despite the control-heavy algorithm of DSMC with stochastic collisions making coalesced accesses particularly difficult, we are happy to share up to a **298x speedup on a single V100 GPU** compared to a mid-range AMD Ryzen 5000 CPU running the equivalent serial version. 
 <p align="center">
   <img src="benchmarking/performance_histogram.png" alt="perf" width="500">
 </p>
 
-For collisions, we use two approaches. The "No Time Collision Scheme" by Bird is common in DSMC, but suffers from a lack of intra-cell parallelism by design. Within each cell, collisions must be serialized because of possible repeated particles being selected to collide in sequence. Removing the possible same-particle collisions gives up the stochastic principles that make NTC work. As collisions were the major bottleneck of the entire DSMC program, our solution to this was as follows:
-1. Sort all cells into a work queue, determine the cut-off of where heavy cells ($\ge 300$ particles) end and light cells ($\lt 300$ particles) begin.
-2. Launch one thread per cell for the light cells using NTC scheme
-3. For heavy cells, use the Half Split Shuffle algorithm proposed by Bhattarai et al. just a few months ago, which is a parallel DSMC collision method for FPGAs. We made the first CUDA implementation of this novel method for heavy cells, which gave us **up to $21.2\%$ speedup** on overall execution time (depending on particles size). 
+## Handling Collisions
 
+For collisions, we use two approaches. The "No Time Counter Scheme" by G.A. Bird is common in DSMC, but suffers from a lack of intra-cell parallelism by design. Within each cell, collisions must be serialized because of possible repeated particles being selected to collide in sequence. Removing the possible same-particle collisions gives up the stochastic principles that make NTC work. As collisions were the major bottleneck of the entire DSMC program, our solution to this was as follows:
+1. Sort all cells into a work queue, determine the cut-off of where heavy cells ($\ge 300$ particles) end and light cells ($\lt 300$ particles) begin.
+2. Launch a number threads for light cells. The threads keep taking the heaviest possible light cells from the queue while the queue is still not empty. When a thread takes the cell, it processes the collisions inside.
+
+*Note: All illustrations in this README are drawn ourselves*
+<p align="center">
+  <img src="vis/ntc.png" alt="b1" width="500">
+</p>
+3. For heavy cells, use the Half Split Shuffle algorithm [1] proposed by Bhattarai et al. just a few months ago, which is a parallel DSMC collision method for FPGAs. We made the first CUDA implementation of this novel method for heavy cells, which gave us **up to $21.2\%$ speedup** on overall execution time (depending on particles number). 
+<p align="center">
+  <img src="vis/hss.png" alt="b1" width="500">
+</p>
 
 Our initial 2D serial version adapted from DSMC lectures found online of [University of Alabama](https://volkov.eng.ua.edu/ME591_491_NEGD/2017-Spring-NEGD-06-DSMC.pdf) and [Purdue University](www.youtube.com/watch?v=cSFr8MTr30Y).
 
+## CUDA Development Process
 
-We made several CUDA improvements over the course of this project. They are summarized in the list below, grouped by milestones which are graphed to visualize the acceleration speedups (over 2000 time steps). Trackable in the closed PRs with speedup documented per change, we made the following main improvements:
-1. Naive CUDA implementation
-2. Improved private, shared, and constant memory
-3. Add cluster deployment for Galileo 100 cluster
+We made several CUDA improvements over the course of this project, following the recommended methodology by NVIDIA with NSight Systems and NSight Compute. They are summarized in the list below, grouped by milestones which are graphed to visualize the acceleration speedups (over 2000 time steps). Trackable in the closed PRs with speedup documented per change, we made the following main improvements:
+1. Naive CUDA implementation **<-- Milestone (Blue)**
+2. Used private, shared, and constant memory for better memory management
+3. Add slurm deployment for Galileo 100 cluster
 4. AoS to SoA
 5. Implement Half-Split-Shuffle Algorithm to parallelize collisions of heavy cells
-6. Reduce fp64 pressure
+6. Reduce fp64 pressure **<-- Milestone (Orange)**
 7. Particle reordering
 8. Sorted, ordered particles
 9. Hybrid AoS/SoA memory layout
 10. Work Queues for faster collisions
-11. Adding MPI support for multiple GPUs
-
+11. Adding MPI support for multiple GPUs **<-- Milestone (Green)**
 
 <p align="center">
   <img src="benchmarking/benchmark_speedups.png" alt="b1" width="500">
@@ -46,24 +66,28 @@ Specifically, the following kernels were bottlenecks that drove our optimization
   <img src="benchmarking/kernel_speedups_large.png" alt="b2" width="500">
 </p>
 
-While DSMC has been shown to work well with around 50 similated particles per cell in published literature, we wanted to ensure we can scale to more detailed simulations for more complex flows. The follow graph demonstrates the scaling speedup as the number of particles grow (where total number of particles is particles per cell $\times 125000$ cells), for example for 300 target particles per cell, that is $300 \times 125000 = 37,500,000$ simulated particles.
+While DSMC has been shown to work well with around 50 similated particles per cell in published literature, we wanted to ensure we can scale to more detailed simulations for more complex flows. The follow graph demonstrates the scaling speedup as the number of particles grow (where total number of particles is particles per cell $\times 125000$ cells), for example for 300 target particles per cell, that is $300 \times 125000 = 37,500,000$ simulated particles. We can see how powerful HSS is in the scale up from 100 to 200 particles per cell; we solve **double** the program size in only **~21%** extra time.
 <p align="center">
   <img src="benchmarking/particle_scaling.png" alt="b3" width="300">
 </p>
 
 ## Memory Coalescing
-The stochastic nature of DSMC meant that we are largely memory-bound. With NSight compute we experimented to determine the best memory layout and memory arrangement scheme to maximize coalesced access. We began with a SoA setup, as follows:
+The stochastic nature of DSMC meant that we are largely memory-bound. With NSight Compute we experimented to determine the best memory layout and memory arrangement scheme to maximize coalesced access. We began with a AoS (Array of Structures) setup, as follows:
 <p align="center">
-  <img src="benchmarking/SoA.png" alt="SoA" width="500">
+  <img src="benchmarking/SoA.png" alt="AoS" width="500">
 </p>
 
-For improved memory coalescing when many threads within a warp access particle data, we initially switched to an AoS layout as seen below: 
+For improved memory coalescing when many threads within a warp access particle data, we initially switched to an SoA (Structure of Arrays) layout as seen below: 
 
 <p align="center">
   <img src="benchmarking/AoS.png" alt="AoS" width="100">
 </p>
 
 While overall accesses became more coalesced, collision kernels got penalized, and had even more uncoalesced access now. We realized that this is because particles tended to not be near each other, as their memory location did not change since their initialization, but particles move across different cells. With this information from NSight Compute, we then experimented with a periodic reorder kernel; every $N$ time steps, we reorder all particle data stored in shared memory according to which cell they are in. We do not have to do this every cell since particles generally move similarly to their neighbours, so we found that optimally we reorder particle memory locations every $20$ iterations. 
+
+<p align="center">
+  <img src="vis/reorder.png" alt="AoS" width="400">
+</p>
 
 | Row | Baseline time (ms) | Reorder every 20 iters time (ms) | Speedup vs baseline | Reorder every iter time (ms) | Speedup vs baseline |
 |---|---:|---:|---:|---:|---:|
@@ -72,7 +96,7 @@ While overall accesses became more coalesced, collision kernels got penalized, a
 | Binning Kernel | 4820.8184 | 2178.6170 | 54.81% | 1580.4815 | 67.22% |
 | HSS Kernel | 525.7128 | 455.7363 | 13.31% | 403.8196 | 23.19% |
 
-However, we noticed that many kernels still struggled with uncoalesced accesses, particularly binning and filtering. So we largely simulation workflow to keep an ordered particle memory array that is re-sorted every iteration and uses the CUDA CUB library for prefix sum calculations.
+However, we noticed that many kernels still struggled with uncoalesced accesses, particularly binning and filtering. So we largely changed the simulation workflow to keep an ordered particle memory array that is re-sorted every iteration and uses the CUDA CUB library for prefix sum calculations.
 
 |   |   Baseline | Ordered   |   Speedup |
 |---|---|---|---|
@@ -97,15 +121,41 @@ At first we thought that having padding would improve coalescing because of memo
 | Kernel: accumulate_sampling total time | 1253.8859 ms | 741.5385 ms **(+69.09%)** | 806.2923 ms (+55.51%) |
 
 
+## Multi-GPU Implementation
 
-## Building and running
+The project was extended to support running the simulation on multiple GPUs using MPI communication. 
+
+The cluster we have tested the setup supports launching 2 GPUs, however the MPI is not CUDA-aware, which limited the performance of our implementation.
+
+The GPUs get a piece of the simulation to run: each gets an equal range of X axis to consider, which means that we split the grid by Y-Z planes. After each simulation step the GPU might need to communicate to its left or right neighbour, and pass the particles that moved out of its own bands. A kernel is made to calculate which particles are such, and then MPI communication takes place.
+
+Since we have made this for non CUDA-aware MPI, there is an overhead of sending the particles device to host before MPI communication. However, we have used several tricks, such as using pinned memory and exclusive sum, scatter, unpack patterns, to improve performance. In the end, the performance comparison is as follows:
+- on single GPU it takes 17.5 seconds and 3573 MiB memory;
+- whereas on two GPUs it takes 17.5 seconds (each) and 2140 MiB memory.
+
+This means that because of the added communication overhead, there is no speedup in using two GPUs, however, the memory is saved (~67% improvement). This allows to run the simulation with bigger problem size, and scale it on multiple GPUs.
+
+## Building and Running
 First, install dependencies. We use NVCC and MPI, alongside the build tools like cmake.
 ```
 sudo apt update
 sudo apt install -y build-essential cmake nvidia-cuda-toolkit openmpi-bin libopenmpi-dev
 ```
 
-To build the CUDA version:
+To build and run the serial version (configuration setup in `serial/src/config.c` and `serial/include/config.h`):
+```
+cd serial
+mkdir build
+cd build
+cmake ..
+make
+
+# run one of the following:
+./DSMC_wing  # angled flow against the wing
+./DSMC_ball  # flow against sphere
+```
+
+To build the CUDA version (configuration setup in `cuda/src/config.cu` and `cuda/include/config.h`):
 ```
 cd cuda # or serial for serial version
 mkdir build
@@ -138,9 +188,12 @@ To run locally, you have three options.
 
 With `plot.py` the plot can be generated for a slice of the 3D space. For example, we can plot the z=0.55 hyperplane on the sphere case using:
 ```
-python plot.py sphere build/fields_avg.dat z_val=0.55 output_plot.png
+python plot.py sphere build/fields_avg.dat 0.55 output_plot.png
 ```
 
 When running without MPI, the `.vpi` and `.vpt` files are created that can be opened with ParaView. This industry standard tool allows for full flexibility with dealing with the data produced by the DSMC simulation. 
 
 ![paraview](vis/paraview.png)
+
+## Citations
+[1] Bhattarai, S., O’ Byrne, S., Peters, E., Petty, D. (2026). Spatially-Parallel Collision Scheme for Implementing Direct Simulation Monte Carlo in Field-Programmable Gate Arrays. In: Grabe, M., Oblapenko, G., Torrilhon, M. (eds) Rarefied Gas Dynamics. RGD 2024. Springer Aerospace Technology. Springer, Cham. https://doi.org/10.1007/978-3-032-00094-1_38 
