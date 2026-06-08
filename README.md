@@ -13,6 +13,7 @@ This project is a 3D CUDA-accelerated implementation of Direct Simulation Monte 
 - [Handling Collisions](#handling-collisions)
 - [Cuda Development Process](#cuda-development-process)
 - [Memory Coalescing](#memory-coalescing)
+- [Multi-GPU Implementation](#multi-gpu-implementation)
 - [Building and Running](#building-and-running)
 
 ## Description
@@ -120,8 +121,14 @@ At first we thought that having padding would improve coalescing because of memo
 | Kernel: accumulate_sampling total time | 1253.8859 ms | 741.5385 ms **(+69.09%)** | 806.2923 ms (+55.51%) |
 
 
+## Multi-GPU Implementation
 
-## Building and running
+The project was extended to support running the simulation on multiple GPUs using MPI communication. 
+
+The cluster we have tested the setup supports launching 2 GPUs, however the MPI is not CUDA-aware, which limited the performance of our implementation.
+
+
+## Building and Running
 First, install dependencies. We use NVCC and MPI, alongside the build tools like cmake.
 ```
 sudo apt update
