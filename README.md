@@ -127,6 +127,13 @@ The project was extended to support running the simulation on multiple GPUs usin
 
 The cluster we have tested the setup supports launching 2 GPUs, however the MPI is not CUDA-aware, which limited the performance of our implementation.
 
+The GPUs get a piece of the simulation to run: each gets an equal range of X axis to consider, which means that we split the grid by Y-Z planes. After each simulation step the GPU might need to communicate to its left or right neighbour, and pass the particles that moved out of its own bands. A kernel is made to calculate which particles are such, and then MPI communication takes place.
+
+Since we have made this for non CUDA-aware MPI, there is an overhead of sending the particles device to host before MPI communication. However, we have used several tricks, such as using pinned memory and exclusive sum, scatter, unpack patterns, to improve performance. In the end, the performance comparison is as follows:
+- on single GPU it takes 17.5 seconds and 3573 MiB memory;
+- whereas on two GPUs it takes 17.5 seconds (each) and 2140 MiB memory.
+
+This means that because of the added communication overhead, there is no speedup in using two GPUs, however, the memory is saved (~67% improvement). This allows to run the simulation with bigger problem size, and scale it on multiple GPUs.
 
 ## Building and Running
 First, install dependencies. We use NVCC and MPI, alongside the build tools like cmake.
