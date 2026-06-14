@@ -1,0 +1,98 @@
+#ifndef DSMC_CONFIG_H
+#define DSMC_CONFIG_H
+
+#include <cuda_runtime.h>
+
+#define MAX_PARTICLES 100000000
+#define MAX_PARTICLES_PER_CELL 1000
+#define NX 50
+#define NY 50
+#define NZ 50
+
+#define PARTICLES_FIELD_SZ (MAX_PARTICLES * sizeof(float))
+#define SAMPLES_SZ (NX * NY * NZ * sizeof(Cell))
+#define CELL_COUNT_SZ (NX * NY * NZ * sizeof(int))
+#define CELL_LIST_SZ (NX * NY * NZ * MAX_PARTICLES_PER_CELL * sizeof(int))
+
+typedef struct {
+    double KB;
+    double NA;
+
+    // size of domain (m)
+    double Lx;
+    double Ly;
+    double Lz;
+    double DL;
+
+    // gas properties
+    double molarMass;
+
+    // simulation loop parameters
+    float dt;
+    int nSteps;
+    int printPeriod;
+    int particlesPerCellTarget;
+    int firstSampleStep;
+    int samplingPeriod;
+
+    #ifdef WING_CASE
+        // wing
+        float WingX;
+        float WingY;
+        float WingLength;
+        double Tw;
+
+        // stream
+        double MaFree;
+        double PFree;
+        double TFree;
+        float angleOfAttack;
+    #elif defined(BALL_CASE)
+        // ball 
+        float ballCenterX;
+        float ballCenterY;
+        float ballCenterZ;
+        float ballRadius;
+        double Tb;
+
+        float ballRadiusSquared; // derived
+
+        // stream
+        double MaFree;
+        double PFree;
+        double TFree;
+    #endif
+
+    // VHS model
+    double omega;
+    double dRef;
+
+    // derived parameters
+    double moleculeMass;
+    double dx, dy, dz;
+    double cellVolume;
+    double weight;
+    float NFree;
+    float UFree;
+    float UxFree, UyFree, UzFree;
+
+    // derived, used in collider
+    double sigmaRef;
+    double CrRef;
+    double ntcs_collisionProbMultiplier; // used in no time collision scheme
+    double ntcs_collidingPairsMultiplier; // used in no time collision scheme
+    double ntcs_collisionProbExponent;    // used in no time collision scheme
+
+    double hss_nbatch; // used in HSS scheme
+    double hss_threshold; // used in HSS scheme
+    double hss_collisionProbMultiplier; // used in HSS scheme
+
+    // derived, used in simulation
+    float generation_derivatedMultiplier;
+} Config;
+
+extern __constant__ Config d_conf;
+
+void config_setup(Config *config);
+
+#endif //DSMC_CONFIG_H

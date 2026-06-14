@@ -44,18 +44,19 @@ Our initial 2D serial version adapted from DSMC lectures found online of [Univer
 
 ## CUDA Development Process
 
-We made several CUDA improvements over the course of this project, following the recommended methodology by NVIDIA with NSight Systems and NSight Compute. They are summarized in the list below, grouped by milestones which are graphed to visualize the acceleration speedups (over 2000 time steps). Trackable in the closed PRs with speedup documented per change, we made the following main improvements:
-1. Naive CUDA implementation **<-- Milestone (Blue)**
-2. Used private, shared, and constant memory for better memory management
+We made several CUDA improvements over the course of this project, following the recommended methodology by NVIDIA with NSight Systems and NSight Compute. They are summarized in the list below, grouped by milestones which are graphed to visualize the acceleration speedups (over 2000 time steps). The improvements we have made can be tracked in this GitHub repository's closed Pull Requests with speedup documented per change. Some milestone versions of the development are also copied into folders `cuda_development_N`. The changes we have made are:
+
+1. Naive CUDA implementation (`cuda_development_1`) **<-- Milestone (Blue)**
+2. Used private, shared, and constant memory for better memory management (`cuda_development_2`)
 3. Add slurm deployment for Galileo 100 cluster
 4. AoS to SoA
-5. Implement Half-Split-Shuffle Algorithm to parallelize collisions of heavy cells
+5. Implement Half-Split-Shuffle Algorithm to parallelize collisions of heavy cells (`cuda_development_3`)
 6. Reduce fp64 pressure **<-- Milestone (Orange)**
-7. Particle reordering
-8. Sorted, ordered particles
+7. Particle reordering (`cuda_development_4`)
+8. Sorted, ordered particles (`cuda_development_5`)
 9. Hybrid AoS/SoA memory layout
 10. Work Queues for faster collisions
-11. Adding MPI support for multiple GPUs **<-- Milestone (Green)**
+11. Adding MPI support for multiple GPUs (`cuda_development_6`) **<-- Milestone (Green)**
 
 <p align="center">
   <img src="benchmarking/benchmark_speedups.png" alt="b1" width="500">
